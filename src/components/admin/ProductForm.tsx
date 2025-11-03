@@ -23,7 +23,7 @@ export default function ProductForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Form state
+  // Form state - VERIFICAR QUE ESTA PARTE ESTÉ BIEN
   const [formData, setFormData] = useState({
     name: product?.name || '',
     slug: product?.slug || '',
@@ -38,7 +38,7 @@ export default function ProductForm({
   })
 
   const [sizes, setSizes] = useState<string[]>(
-    product?.sizes?.map(s => s.size) || []
+    product?.sizes?.sort((a, b) => a.order_index - b.order_index).map(s => s.size) || []
   )
   const [newSize, setNewSize] = useState('')
 
