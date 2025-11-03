@@ -80,6 +80,7 @@ export default async function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Link
             href="/admin/productos/nuevo"
+            target='_blank'
             className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
           >
             <Package className="w-5 h-5 text-gray-600" />
@@ -91,6 +92,7 @@ export default async function AdminDashboard() {
           
           <Link
             href="/admin/productos"
+            target='_blank'
             className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition"
           >
             <TrendingUp className="w-5 h-5 text-gray-600" />
