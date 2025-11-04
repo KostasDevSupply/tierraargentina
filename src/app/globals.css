@@ -2,26 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Paleta Tierra Argentina */
 :root {
   --background: #faf6f1;
   --foreground: #2D5016;
-  --accent: #8B4513;
-  --muted: #D4C6A8;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1b1b1b;
-    --foreground: #F5DEB3;
-    --accent: #B87333;
-    --muted: #4b3d2d;
-  }
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: 'Inter', system-ui, sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: system-ui, sans-serif;
 }

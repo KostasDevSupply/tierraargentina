@@ -3,6 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Save, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import type { Category, Type, Product } from '@/types'
+import toast from 'react-hot-toast'
+
 import { createProduct, updateProduct } from '@/lib/actions/products'
 import type { Category, Type, Product } from '@/types'
 
@@ -80,6 +84,157 @@ export default function ProductForm({
     setLoading(true)
 
     try {
+      // Validaciones básicas
+      if (!formData.name.trim()) {
+        throw new Error('El nombre es obligatorio')
+      }
+
+      if (!formData.category_id) {
+        throw new Error('Debes seleccionar una categoría')
+      }
+
+      if (sizes.length === 0) {
+        throw new Error('Debes agregar al menos un talle')
+      }
+
+      const supabase = createClient()
+
+      // Verificar sesión
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Tu sesión expiró. Redirigiendo...')
+      }
+
+      console.log('Operación:', isEdit ? 'UPDATE' : 'CREATE')
+      console.log('Datos:', { formData, sizes })
+
+      if (isEdit && product) {
+        // ============================================
+        // ACTUALIZAR PRODUCTO EXISTENTE
+        // ============================================
+        console.log('Actualizando producto:', product.id)
+
+        // 1. Actualizar producto
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({
+            name: formData.name,
+            slug: formData.slug,
+            description: formData.description || null,
+            short_description: formData.short_description || null,
+            price: Number(formData.price) || 0,
+            category_id: formData.category_id,
+            type_id: formData.type_id || null,
+            notes: formData.notes || null,
+            is_active: formData.is_active,
+            is_featured: formData.is_featured,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', product.id)
+
+        if (updateError) {
+          throw new Error(`Error al actualizar: ${updateError.message}`)
+        }
+
+        // 2. Eliminar talles viejos
+        const { error: deleteSizesError } = await supabase
+          .from('product_sizes')
+          .delete()
+          .eq('product_id', product.id)
+
+        if (deleteSizesError) {
+          console.warn('Error al eliminar talles:', deleteSizesError)
+        }
+
+        // 3. Crear nuevos talles
+        const sizesData = sizes.map((size, index) => ({
+          product_id: product.id,
+          size: size,
+          order_index: index,
+        }))
+
+        const { error: insertSizesError } = await supabase
+          .from('product_sizes')
+          .insert(sizesData)
+
+        if (insertSizesError) {
+          throw new Error(`Error al actualizar talles: ${insertSizesError.message}`)
+        }
+
+        console.log('✅ Producto actualizado exitosamente')
+
+      } else {
+        // ============================================
+        // CREAR PRODUCTO NUEVO
+        // ============================================
+        console.log('Creando nuevo producto')
+
+        // 1. Verificar slug único
+        const { data: existingProduct } = await supabase
+          .from('products')
+          .select('id')
+          .eq('slug', formData.slug)
+          .maybeSingle()
+
+        if (existingProduct) {
+          throw new Error('Ya existe un producto con ese nombre. Usa otro.')
+        }
+
+        // 2. Crear producto
+        const { data: newProduct, error: createError } = await supabase
+          .from('products')
+          .insert({
+            name: formData.name,
+            slug: formData.slug,
+            description: formData.description || null,
+            short_description: formData.short_description || null,
+            price: Number(formData.price) || 0,
+            category_id: formData.category_id,
+            type_id: formData.type_id || null,
+            notes: formData.notes || null,
+            is_active: formData.is_active,
+            is_featured: formData.is_featured,
+          })
+          .select()
+          .single()
+
+        if (createError || !newProduct) {
+          throw new Error(`Error al crear: ${createError?.message || 'Error desconocido'}`)
+        }
+
+        console.log('Producto creado:', newProduct.id)
+
+        // 3. Crear talles
+        const sizesData = sizes.map((size, index) => ({
+          product_id: newProduct.id,
+          size: size,
+          order_index: index,
+        }))
+
+        const { error: insertSizesError } = await supabase
+          .from('product_sizes')
+          .insert(sizesData)
+
+        if (insertSizesError) {
+          // Rollback: eliminar producto
+          console.error('Error al crear talles, haciendo rollback')
+          await supabase.from('products').delete().eq('id', newProduct.id)
+          throw new Error(`Error al crear talles: ${insertSizesError.message}`)
+        }
+
+        console.log('✅ Producto creado exitosamente')
+      }
+
+      // Éxito - Mostrar mensaje y redirigir
+     toast.success(isEdit ? 'Producto actualizado' : 'Producto creado')
+      router.push('/admin/productos')
+      router.refresh()
+
+    } catch (err: any) {
+      console.error('❌ Error:', err)
+      toast.error(err.message || 'Error inesperado')
+      setLoading(false)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
       const productData = {
         ...formData,
         price: Number(formData.price),
@@ -110,6 +265,7 @@ export default function ProductForm({
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800 text-sm font-medium">{error}</p>
           <p className="text-red-800 text-sm">{error}</p>
         </div>
       )}
@@ -124,11 +280,14 @@ export default function ProductForm({
           value={formData.name}
           onChange={handleNameChange}
           required
+          disabled={loading}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="Ej: Bombacha gabardina elastizada dama"
         />
       </div>
 
+      {/* Slug */}
       {/* Slug (auto-generado) */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -139,6 +298,8 @@ export default function ProductForm({
           value={formData.slug}
           onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
           required
+          disabled={loading}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 disabled:opacity-50"
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
           placeholder="bombacha-gabardina-elastizada-dama"
         />
@@ -157,6 +318,8 @@ export default function ProductForm({
             value={formData.category_id}
             onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
             required
+            disabled={loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Seleccionar categoría</option>
@@ -175,6 +338,8 @@ export default function ProductForm({
           <select
             value={formData.type_id}
             onChange={(e) => setFormData({ ...formData, type_id: e.target.value })}
+            disabled={loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Sin tipo</option>
@@ -196,6 +361,13 @@ export default function ProductForm({
           <span className="absolute left-3 top-2 text-gray-500">$</span>
           <input
             type="number"
+            value={formData.price || ''}
+            onChange={(e) => setFormData({ ...formData, price: e.target.value ? parseFloat(e.target.value) : 0 })}
+            required
+            min="0"
+            step="1"
+            disabled={loading}
+            className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
             value={formData.price}
             onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
             required
@@ -219,6 +391,9 @@ export default function ProductForm({
           type="text"
           value={formData.short_description}
           onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
+          disabled={loading}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+          placeholder="Ej: Gabardina elastizada premium"
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="Ej: Gabardina elastizada premium con bordado exclusivo"
           maxLength={150}
@@ -234,6 +409,9 @@ export default function ProductForm({
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           rows={4}
+          disabled={loading}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+          placeholder="Descripción detallada..."
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="Descripción detallada del producto..."
         />
@@ -255,12 +433,17 @@ export default function ProductForm({
                 addSize()
               }
             }}
+            disabled={loading}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            placeholder="Ej: 38, M, XL"
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Ej: 38, M, XL, 32cm"
           />
           <button
             type="button"
             onClick={addSize}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Agregar
@@ -278,6 +461,8 @@ export default function ProductForm({
                 <button
                   type="button"
                   onClick={() => removeSize(size)}
+                  disabled={loading}
+                  className="text-red-600 hover:text-red-800 disabled:opacity-50"
                   className="text-red-600 hover:text-red-800"
                 >
                   <X className="w-4 h-4" />
@@ -300,6 +485,8 @@ export default function ProductForm({
           type="text"
           value={formData.notes}
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          disabled={loading}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="Ej: Los bordados pueden cambiar"
         />
@@ -312,6 +499,8 @@ export default function ProductForm({
             type="checkbox"
             checked={formData.is_active}
             onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+            disabled={loading}
+            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
           />
           <span className="text-sm text-gray-700">Producto activo</span>
@@ -322,6 +511,8 @@ export default function ProductForm({
             type="checkbox"
             checked={formData.is_featured}
             onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
+            disabled={loading}
+            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
           />
           <span className="text-sm text-gray-700">Destacado</span>
@@ -333,6 +524,8 @@ export default function ProductForm({
         <button
           type="button"
           onClick={() => router.back()}
+          disabled={loading}
+          className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
         >
           Cancelar
@@ -343,6 +536,9 @@ export default function ProductForm({
           className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Save className="w-4 h-4" />
+          <span>
+            {loading ? '⏳ Guardando...' : (isEdit ? 'Actualizar Producto' : 'Crear Producto')}
+          </span>
           <span>{loading ? 'Guardando...' : (isEdit ? 'Actualizar' : 'Crear Producto')}</span>
         </button>
       </div>
