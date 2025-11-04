@@ -33,8 +33,6 @@ export default async function Home() {
     `)
     .order('created_at', { ascending: false })
 
-  console.log('Products:', products)
-  console.log('Error:', error)
   
   return (
     <main className="p-8 max-w-6xl mx-auto">

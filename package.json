@@ -4,10 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "rm -rf .next && next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "seed": "tsx src/lib/scripts/seed-database.ts"
+    "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

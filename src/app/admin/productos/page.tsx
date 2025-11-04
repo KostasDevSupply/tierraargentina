@@ -230,6 +230,9 @@ export default async function ProductosPage() {
                   Talles
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fotos
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Creado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -283,6 +286,16 @@ export default async function ProductosPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {product.sizes?.length || 0} talles
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-1">
+                        <span className={`text-sm ${product.images && product.images.length > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
+                          {product.images?.length || 0}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {product.images && product.images.length === 1 ? 'foto' : 'fotos'}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex flex-col">
                         <span>{formatDate(product.created_at).split(',')[0]}</span>
@@ -329,7 +342,7 @@ export default async function ProductosPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center">
                       <p className="text-gray-500 mb-4">No hay productos</p>
                       <Link

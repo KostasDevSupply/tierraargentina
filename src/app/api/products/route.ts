@@ -24,7 +24,6 @@ async function getSupabaseClient() {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('=== POST /api/products ===')
   
   const supabase = await getSupabaseClient()
   const cookieStore = await cookies()
