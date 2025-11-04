@@ -40,7 +40,7 @@ export default async function AdminDashboard() {
     <div className="min-h-screen px-6 md:px-12 py-10 bg-gray-50">
       {/* Header */}
       <header className="mb-14 text-center flex w-full flex-col">
-        <h1 className="text-4xl md:text-5xl font-semibold text-red-300 tracking-tight">
+        <h1 className="text-4xl md:text-5xl font-semibold text-gray-600 tracking-tight">
           Panel de Administración
         </h1>
         <p className="text-gray-500 mt-3 text-base md:text-lg">
