@@ -81,6 +81,8 @@ export default async function AdminDashboard() {
           <Link
             href="/admin/productos/nuevo"
             className="flex items-center space-x-4 p-5 rounded-2xl border border-gray-200 hover:border-[#023e8a] bg-white hover:bg-[#023e8a]/5 transition-all duration-300"
+            target='_blank'
+            className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
           >
             <div className="p-3 rounded-xl bg-[#023e8a]/10">
               <Package className="w-5 h-5 text-[#023e8a]" />
@@ -94,6 +96,8 @@ export default async function AdminDashboard() {
           <Link
             href="/admin/productos"
             className="flex items-center space-x-4 p-5 rounded-2xl border border-gray-200 hover:border-[#023e8a] bg-white hover:bg-[#023e8a]/5 transition-all duration-300"
+            target='_blank'
+            className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition"
           >
             <div className="p-3 rounded-xl bg-[#023e8a]/10">
               <TrendingUp className="w-5 h-5 text-[#023e8a]" />
