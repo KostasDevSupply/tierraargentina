@@ -1,10 +1,68 @@
-import { type NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
-export function middleware(request: NextRequest) {
-  // Por ahora, solo dejar pasar todo
-  return
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
+          })
+          response = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
+
+  // Obtener sesión
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
+  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
+
+  // Proteger rutas de admin
+  if (isAdminRoute && !session) {
+    const redirectUrl = new URL('/login', request.url)
+    redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // Si ya está autenticado y va a /login, redirigir a admin
+  if (isAuthRoute && session) {
+    return NextResponse.redirect(new URL('/admin', request.url))
+  }
+
+  return response
 }
 
 export const config = {
-  matcher: [],
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }
