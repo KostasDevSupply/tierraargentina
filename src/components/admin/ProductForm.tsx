@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import type { Category, Type, Product } from '@/types'
 import toast from 'react-hot-toast'
 
+import { createProduct, updateProduct } from '@/lib/actions/products'
+import type { Category, Type, Product } from '@/types'
 
 interface ProductFormProps {
   categories: Category[]
@@ -25,6 +27,7 @@ export default function ProductForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Form state - VERIFICAR QUE ESTA PARTE ESTÉ BIEN
   const [formData, setFormData] = useState({
     name: product?.name || '',
     slug: product?.slug || '',
@@ -43,6 +46,7 @@ export default function ProductForm({
   )
   const [newSize, setNewSize] = useState('')
 
+  // Auto-generate slug from name
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -228,6 +232,28 @@ export default function ProductForm({
       toast.error(err.message || 'Error inesperado')
       setLoading(false)
       window.scrollTo({ top: 0, behavior: 'smooth' })
+      const productData = {
+        ...formData,
+        price: Number(formData.price),
+      }
+
+      let result
+      if (isEdit && product) {
+        result = await updateProduct(product.id, productData, sizes)
+      } else {
+        result = await createProduct(productData, sizes)
+      }
+
+      if (result.success) {
+        router.push('/admin/productos')
+        router.refresh()
+      } else {
+        setError(result.error || 'Error al guardar el producto')
+        setLoading(false)
+      }
+    } catch (err) {
+      setError('Error inesperado al guardar')
+      setLoading(false)
     }
   }
 
@@ -237,6 +263,7 @@ export default function ProductForm({
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800 text-sm font-medium">{error}</p>
+          <p className="text-red-800 text-sm">{error}</p>
         </div>
       )}
 
@@ -252,11 +279,13 @@ export default function ProductForm({
           required
           disabled={loading}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="Ej: Bombacha gabardina elastizada dama"
         />
       </div>
 
       {/* Slug */}
+      {/* Slug (auto-generado) */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           URL (Slug)
@@ -268,6 +297,7 @@ export default function ProductForm({
           required
           disabled={loading}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 disabled:opacity-50"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
           placeholder="bombacha-gabardina-elastizada-dama"
         />
         <p className="text-xs text-gray-500 mt-1">
@@ -287,6 +317,7 @@ export default function ProductForm({
             required
             disabled={loading}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Seleccionar categoría</option>
             {categories.map((cat) => (
@@ -306,6 +337,7 @@ export default function ProductForm({
             onChange={(e) => setFormData({ ...formData, type_id: e.target.value })}
             disabled={loading}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Sin tipo</option>
             {types.map((type) => (
@@ -333,6 +365,12 @@ export default function ProductForm({
             step="1"
             disabled={loading}
             className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            value={formData.price}
+            onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+            required
+            min="0"
+            step="1"
+            className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="35000"
           />
         </div>
@@ -353,6 +391,8 @@ export default function ProductForm({
           disabled={loading}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
           placeholder="Ej: Gabardina elastizada premium"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="Ej: Gabardina elastizada premium con bordado exclusivo"
           maxLength={150}
         />
       </div>
@@ -369,6 +409,8 @@ export default function ProductForm({
           disabled={loading}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
           placeholder="Descripción detallada..."
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="Descripción detallada del producto..."
         />
       </div>
 
@@ -391,12 +433,15 @@ export default function ProductForm({
             disabled={loading}
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
             placeholder="Ej: 38, M, XL"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Ej: 38, M, XL, 32cm"
           />
           <button
             type="button"
             onClick={addSize}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Agregar
           </button>
@@ -415,6 +460,7 @@ export default function ProductForm({
                   onClick={() => removeSize(size)}
                   disabled={loading}
                   className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                  className="text-red-600 hover:text-red-800"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -438,6 +484,7 @@ export default function ProductForm({
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           disabled={loading}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="Ej: Los bordados pueden cambiar"
         />
       </div>
@@ -451,6 +498,7 @@ export default function ProductForm({
             onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
             disabled={loading}
             className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
           />
           <span className="text-sm text-gray-700">Producto activo</span>
         </label>
@@ -462,6 +510,7 @@ export default function ProductForm({
             onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
             disabled={loading}
             className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
           />
           <span className="text-sm text-gray-700">Destacado</span>
         </label>
@@ -474,6 +523,7 @@ export default function ProductForm({
           onClick={() => router.back()}
           disabled={loading}
           className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
         >
           Cancelar
         </button>
@@ -486,6 +536,7 @@ export default function ProductForm({
           <span>
             {loading ? '⏳ Guardando...' : (isEdit ? 'Actualizar Producto' : 'Crear Producto')}
           </span>
+          <span>{loading ? 'Guardando...' : (isEdit ? 'Actualizar' : 'Crear Producto')}</span>
         </button>
       </div>
     </form>
