@@ -55,8 +55,6 @@ export async function createProduct(productData: ProductData, sizes: string[]) {
         notes: productData.notes || null,
         is_active: productData.is_active,
         is_featured: productData.is_featured,
-        ...productData,
-        type_id: productData.type_id || null,
       })
       .select()
       .single()
@@ -67,9 +65,6 @@ export async function createProduct(productData: ProductData, sizes: string[]) {
     }
 
     console.log('Product created:', product)
-
-      return { success: false, error: productError.message }
-    }
 
     // Crear talles
     if (sizes.length > 0) {
@@ -90,7 +85,6 @@ export async function createProduct(productData: ProductData, sizes: string[]) {
         // Eliminar el producto si falló crear los talles
         await supabase.from('products').delete().eq('id', product.id)
         return { success: false, error: `Error al crear talles: ${sizesError.message}` }
-        return { success: false, error: sizesError.message }
       }
     }
 
@@ -102,7 +96,6 @@ export async function createProduct(productData: ProductData, sizes: string[]) {
       success: false, 
       error: `Error inesperado: ${error instanceof Error ? error.message : 'Error desconocido'}` 
     }
-    return { success: false, error: 'Error inesperado al crear el producto' }
   }
 }
 
@@ -136,8 +129,6 @@ export async function updateProduct(productId: string, productData: ProductData,
         notes: productData.notes || null,
         is_active: productData.is_active,
         is_featured: productData.is_featured,
-        ...productData,
-        type_id: productData.type_id || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', productId)
@@ -145,7 +136,6 @@ export async function updateProduct(productId: string, productData: ProductData,
     if (productError) {
       console.error('Product update error:', productError)
       return { success: false, error: `Error al actualizar: ${productError.message}` }
-      return { success: false, error: productError.message }
     }
 
     // Eliminar talles antiguos
@@ -169,7 +159,6 @@ export async function updateProduct(productId: string, productData: ProductData,
       if (sizesError) {
         console.error('Sizes update error:', sizesError)
         return { success: false, error: `Error al actualizar talles: ${sizesError.message}` }
-        return { success: false, error: sizesError.message }
       }
     }
 
@@ -182,7 +171,6 @@ export async function updateProduct(productId: string, productData: ProductData,
       success: false, 
       error: `Error inesperado: ${error instanceof Error ? error.message : 'Error desconocido'}` 
     }
-    return { success: false, error: 'Error inesperado al actualizar el producto' }
   }
 }
 
@@ -209,15 +197,4 @@ export async function deleteProduct(productId: string) {
       error: `Error inesperado: ${error instanceof Error ? error.message : 'Error desconocido'}` 
     }
   }
-  const { error } = await supabase
-    .from('products')
-    .delete()
-    .eq('id', productId)
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath('/admin/productos')
-  return { success: true }
 }
