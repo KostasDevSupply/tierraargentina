@@ -101,14 +101,11 @@ export default function ProductForm({
         throw new Error('Tu sesión expiró. Redirigiendo...')
       }
 
-      console.log('Operación:', isEdit ? 'UPDATE' : 'CREATE')
-      console.log('Datos:', { formData, sizes })
 
       if (isEdit && product) {
         // ============================================
         // ACTUALIZAR PRODUCTO EXISTENTE
         // ============================================
-        console.log('Actualizando producto:', product.id)
 
         // 1. Actualizar producto
         const { error: updateError } = await supabase
