@@ -113,7 +113,7 @@ export default async function AdminDashboard() {
       {/* Footer Link */}
       <footer className="mt-14 text-center">
         <Link
-          href="/"
+          href="/inicio"
           className="text-[#023e8a] font-medium hover:text-[#0353a4] transition-colors duration-200"
         >
           ← Ver sitio público

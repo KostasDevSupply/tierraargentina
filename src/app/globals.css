@@ -10,3 +10,21 @@
 body {
   font-family: system-ui, sans-serif;
 }
+
+/* ===== Mover y estilizar el globito de React Query Devtools ===== */
+.tsqd-open-btn-container {
+  bottom: 1.5rem !important;
+  left: 1.5rem !important;
+  right: auto !important;
+  transform: scale(0.8);
+  transition: all 0.3s ease-in-out !important;
+  z-index: 9999 !important;
+  opacity: 0.9;
+}
+
+/* Hover con efecto suave */
+.tsqd-open-btn-container:hover {
+  transform: scale(1) rotate(3deg);
+  opacity: 1;
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.25));
+}

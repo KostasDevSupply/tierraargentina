@@ -1,14 +1,11 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
 import { Providers } from '@/providers/Providers'
+import { ClientProviders } from '@/providers/ClientProviders'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
+import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata: Metadata = {
-  title: 'Tierra Argentina - Catalogo',
-  description: 'Sistema de gestión de catálogo',
+export const metadata = {
+  title: 'Tierra Argentina',
+  description: 'Catálogo de productos de Tierra Argentina',
 }
 
 export default function RootLayout({
@@ -18,10 +15,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={inter.className}>
+      <body>
         <ErrorBoundary>
           <Providers>
-            {children}
+            <ClientProviders>
+              {children}
+            </ClientProviders>
           </Providers>
         </ErrorBoundary>
       </body>

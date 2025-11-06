@@ -148,6 +148,33 @@ export function useTypes() {
   })
 }
 
+/**
+ * Hook para obtener productos destacados (frontend público)
+ */
+export function useFeaturedProducts() {
+  return useQuery({
+    queryKey: ['products', 'featured'],
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          category:categories(name, slug),
+          type:types(name, slug),
+          images:product_images(url, is_primary)
+        `)
+        .eq('is_featured', true)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return data
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutos
+  })
+}
+
 // ============================================
 // HOOKS - MUTATIONS
 // ============================================
