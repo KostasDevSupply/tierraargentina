@@ -68,21 +68,21 @@ export async function POST(request: NextRequest) {
     // Obtener datos del formulario
     const formData = await request.formData()
     const file = formData.get('file') as File
-    const productId = formData.get('productId') as string
+    const productId = formData.get('productId') as string | null
 
     console.log('📦 Datos recibidos:', {
       hasFile: !!file,
       fileName: file?.name,
       fileSize: file?.size,
       fileType: file?.type,
-      productId: productId
+      productId: productId || 'null/temp'
     })
 
-    // Validaciones
-    if (!file || !productId) {
-      console.error('❌ Faltan datos:', { hasFile: !!file, hasProductId: !!productId })
+    // Validaciones - SOLO el archivo es requerido
+    if (!file) {
+      console.error('❌ Falta archivo')
       return NextResponse.json({ 
-        error: 'Faltan datos requeridos (archivo o ID de producto)' 
+        error: 'Falta archivo requerido' 
       }, { status: 400 })
     }
 
@@ -103,10 +103,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Generar nombre único para el archivo
+    // Si no hay productId, usar 'temp' como carpeta temporal
+    const folder = productId || 'temp'
     const fileExt = file.name.split('.').pop() || 'jpg'
     const timestamp = Date.now()
     const random = Math.random().toString(36).substring(7)
-    const fileName = `${productId}/${timestamp}-${random}.${fileExt}`
+    const fileName = `${folder}/${timestamp}-${random}.${fileExt}`
 
     console.log('📝 Nombre generado para archivo:', fileName)
 
@@ -146,40 +148,42 @@ export async function POST(request: NextRequest) {
 
     console.log('🔗 URL pública generada:', publicUrl)
 
+    // Si NO hay productId, solo retornar la URL (imagen temporal)
+    if (!productId) {
+      console.log('⚠️ Sin productId - retornando solo URL temporal')
+      return NextResponse.json({
+        success: true,
+        url: publicUrl,
+        filename: file.name,
+        storage_path: fileName,
+        is_temp: true
+      })
+    }
+
+    // Si HAY productId, guardar en base de datos
+    console.log('💾 Guardando en base de datos con productId:', productId)
+
     // Obtener el siguiente order_index
-    console.log('🔢 Obteniendo order_index...')
-    const { data: existingImages, error: fetchError } = await supabase
+    const { data: existingImages } = await supabase
       .from('product_images')
       .select('order_index')
       .eq('product_id', productId)
       .order('order_index', { ascending: false })
       .limit(1)
 
-    if (fetchError) {
-      console.warn('⚠️ Error al obtener imágenes existentes:', fetchError)
-    }
-
     const nextOrderIndex = existingImages && existingImages.length > 0 
       ? existingImages[0].order_index + 1 
       : 0
 
-    console.log('📊 Order index calculado:', nextOrderIndex)
-
-    // Verificar si es la primera imagen (será principal)
-    const { count, error: countError } = await supabase
+    // Verificar si es la primera imagen
+    const { count } = await supabase
       .from('product_images')
       .select('*', { count: 'exact', head: true })
       .eq('product_id', productId)
 
-    if (countError) {
-      console.warn('⚠️ Error al contar imágenes:', countError)
-    }
-
     const isPrimary = (count ?? 0) === 0
-    console.log('⭐ ¿Es imagen principal?:', isPrimary, '(count:', count, ')')
 
     // Guardar metadata en la base de datos
-    console.log('💾 Guardando en base de datos...')
     const { data: imageData, error: dbError } = await supabase
       .from('product_images')
       .insert({
@@ -196,15 +200,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (dbError) {
-      console.error('❌ Error al guardar en DB:', {
-        message: dbError.message,
-        code: dbError.code,
-        details: dbError.details,
-        hint: dbError.hint
-      })
+      console.error('❌ Error al guardar en DB:', dbError)
 
       // Rollback: Eliminar archivo del storage
-      console.log('🔄 Haciendo rollback - eliminando archivo de storage...')
       await supabase.storage
         .from('product-images')
         .remove([fileName])
@@ -216,16 +214,9 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    console.log('✅ Imagen guardada exitosamente:', {
-      id: imageData.id,
-      filename: imageData.filename,
-      order_index: imageData.order_index,
-      is_primary: imageData.is_primary
-    })
-
+    console.log('✅ Imagen guardada exitosamente')
     console.log('🎉 ===== UPLOAD COMPLETADO EXITOSAMENTE =====')
 
-    // Retornar respuesta exitosa
     return NextResponse.json({
       success: true,
       image: {
@@ -240,7 +231,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('💥 ===== ERROR INESPERADO EN UPLOAD =====')
     console.error('Error details:', error)
-    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace')
     
     return NextResponse.json(
       { 

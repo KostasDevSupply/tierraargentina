@@ -65,7 +65,7 @@ export default function ContactoPage() {
               </div>
 
               <div className="flex items-start gap-4 p-6 bg-white rounded-2xl border-2 border-gray-200">
-                <div className="p-3 bg-blue-400 rounded-xl">
+                <div className="p-3 bg-white rounded-xl">
                   <MapPin className="w-6 h-6 text-pink-600" />
                 </div>
                 <div>

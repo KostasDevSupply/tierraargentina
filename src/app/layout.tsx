@@ -1,28 +1,13 @@
-import { Providers } from '@/providers/Providers'
-import { ClientProviders } from '@/providers/ClientProviders'
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
-import './globals.css'
+import { CartProvider } from '@/contexts/CartContext'
+import CartButton from '@/components/cart/CartButton'
+import CartDrawer from '@/components/cart/CartDrawer'
+import AnnouncementBar from '@/components/public/AnnouncementBar'
 
-export const metadata = {
-  title: 'Tierra Argentina',
-  description: 'Catálogo de productos de Tierra Argentina',
-}
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
       <body>
-        <ErrorBoundary>
-          <Providers>
-            <ClientProviders>
-              {children}
-            </ClientProviders>
-          </Providers>
-        </ErrorBoundary>
+        {children}
       </body>
     </html>
   )

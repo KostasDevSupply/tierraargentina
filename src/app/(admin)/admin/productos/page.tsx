@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, Pencil, Eye } from 'lucide-react'
+import { Pencil, Eye } from 'lucide-react'
 import DeleteProductButton from './DeleteProductButton'
+import ToggleProductButton from './ToggleProductButton'
+import NewProductButton from './NewProductButton'
 
 export default async function ProductosPage() {
   const supabase = await createClient()
@@ -46,13 +48,7 @@ export default async function ProductosPage() {
             Gestiona tu catálogo de productos
           </p>
         </div>
-        <Link
-          href="/admin/productos/nuevo"
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Nuevo Producto</span>
-        </Link>
+        <NewProductButton />
       </div>
 
       {/* Stats */}
@@ -101,9 +97,6 @@ export default async function ProductosPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fotos
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Creado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Estado
@@ -166,24 +159,12 @@ export default async function ProductosPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex flex-col">
-                        <span>{formatDate(product.created_at).split(',')[0]}</span>
-                        <span className="text-xs text-gray-400">
-                          {formatDate(product.created_at).split(',')[1]}
-                        </span>
-                      </div>
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {product.is_active ? (
-                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          Activo
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                          Inactivo
-                        </span>
-                      )}
+                      <ToggleProductButton
+                        productId={product.id}
+                        isActive={product.is_active}
+                        isFeatured={product.is_featured}
+                      />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
@@ -212,15 +193,10 @@ export default async function ProductosPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={7} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center">
                       <p className="text-gray-500 mb-4">No hay productos</p>
-                      <Link
-                        href="/admin/productos/nuevo"
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        Crear primer producto
-                      </Link>
+                      <NewProductButton />
                     </div>
                   </td>
                 </tr>

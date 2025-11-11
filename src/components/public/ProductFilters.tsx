@@ -1,270 +1,258 @@
-// components/public/ProductFilters.tsx
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Filter, X, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Filter, X, Tag, Grid3x3, ArrowUpDown } from 'lucide-react'
+import PriceRangeSlider from './PriceRangeSlider'
 
 interface ProductFiltersProps {
-  categories: Array<{ id: string; name: string; slug: string; icon?: string }>
-  types: Array<{ id: string; name: string; slug: string }>
-  currentFilters: {
-    categoria?: string
-    tipo?: string
-    buscar?: string
-    orden?: string
+  categories: any[]
+  types: any[]
+  priceRange: { min: number; max: number }
+  activeFilters: {
+    category?: string
+    type?: string
+    sort?: string
+    minPrice?: number
+    maxPrice?: number
+    categoryName?: string | null
+    typeName?: string | null
   }
 }
 
-export default function ProductFilters({
-  categories,
-  types,
-  currentFilters,
+export default function ProductFilters({ 
+  categories, 
+  types, 
+  priceRange,
+  activeFilters 
 }: ProductFiltersProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const [showMobileFilters, setShowMobileFilters] = useState(false)
-  const [expandedSections, setExpandedSections] = useState({
-    categorias: true,
-    tipos: true,
-    orden: true,
-  })
 
-  const activeFiltersCount = [
-    currentFilters.categoria,
-    currentFilters.tipo,
-    currentFilters.orden !== 'reciente',
-  ].filter(Boolean).length
-
-  const updateFilter = (key: string, value: string | null) => {
-    const params = new URLSearchParams(searchParams.toString())
+  // ✅ FUNCIÓN MEJORADA PARA CONSTRUIR URL
+  const buildUrl = (updates: Record<string, string | number | undefined | null>) => {
+    const params = new URLSearchParams()
     
-    if (value) {
-      params.set(key, value)
-    } else {
-      params.delete(key)
+    // Procesar cada filtro
+    const processFilter = (key: string, filterKey: keyof typeof activeFilters) => {
+      if (updates[filterKey] !== undefined) {
+        // Si el update es null o undefined, no agregar
+        if (updates[filterKey]) {
+          params.set(key, updates[filterKey]!.toString())
+        }
+      } else if (activeFilters[filterKey]) {
+        // Si no hay update, mantener el valor actual
+        params.set(key, activeFilters[filterKey]!.toString())
+      }
     }
+
+    processFilter('category', 'category')
+    processFilter('type', 'type')
+    processFilter('sort', 'sort')
     
-    router.push(`/productos?${params.toString()}`)
+    // Precio especial
+    if (updates.minPrice !== undefined) {
+      if (updates.minPrice && updates.minPrice !== priceRange.min) {
+        params.set('min', updates.minPrice.toString())
+      }
+    } else if (activeFilters.minPrice && activeFilters.minPrice !== priceRange.min) {
+      params.set('min', activeFilters.minPrice.toString())
+    }
+
+    if (updates.maxPrice !== undefined) {
+      if (updates.maxPrice && updates.maxPrice !== priceRange.max) {
+        params.set('max', updates.maxPrice.toString())
+      }
+    } else if (activeFilters.maxPrice && activeFilters.maxPrice !== priceRange.max) {
+      params.set('max', activeFilters.maxPrice.toString())
+    }
+
+    const urlString = params.toString()
+    return urlString ? `/productos?${urlString}` : '/productos'
   }
 
-  const clearFilters = () => {
-    router.push('/productos')
+  const handleFilterChange = (key: string, value: string | number) => {
+    router.push(buildUrl({ [key]: value }))
   }
 
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
+  const handlePriceChange = (min: number, max: number) => {
+    router.push(buildUrl({ 
+      minPrice: min === priceRange.min ? null : min,
+      maxPrice: max === priceRange.max ? null : max
     }))
   }
 
-  const FilterSection = ({
-    title,
-    sectionKey,
-    children,
-  }: {
-    title: string
-    sectionKey: keyof typeof expandedSections
-    children: React.ReactNode
-  }) => (
-    <div className="border-b border-gray-200 pb-6 last:border-b-0">
-      <button
-        onClick={() => toggleSection(sectionKey)}
-        className="flex items-center justify-between w-full mb-4 group"
-      >
-        <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
-        <ChevronDown
-          className={`w-5 h-5 text-gray-500 transition-transform ${
-            expandedSections[sectionKey] ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-      {expandedSections[sectionKey] && <div className="space-y-2">{children}</div>}
-    </div>
-  )
+  // ✅ FUNCIÓN MEJORADA PARA REMOVER FILTRO INDIVIDUAL
+  const removeFilter = (filterKey: string) => {
+    if (filterKey === 'price') {
+      router.push(buildUrl({ minPrice: null, maxPrice: null }))
+    } else {
+      router.push(buildUrl({ [filterKey]: null }))
+    }
+  }
 
-  const FilterContent = () => (
-    <div className="space-y-6">
-      {/* Header con clear */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Filter className="w-5 h-5 text-pink-600" />
-          <h2 className="font-bold text-xl text-gray-900">Filtros</h2>
-          {activeFiltersCount > 0 && (
-            <span className="bg-pink-100 text-pink-700 text-xs font-bold px-2.5 py-1 rounded-full">
-              {activeFiltersCount}
-            </span>
-          )}
-        </div>
-        
-        {activeFiltersCount > 0 && (
-          <button
-            onClick={clearFilters}
-            className="text-sm text-gray-600 hover:text-pink-600 font-medium flex items-center gap-1"
-          >
-            <X className="w-4 h-4" />
-            Limpiar
-          </button>
-        )}
-      </div>
+  const clearAllFilters = () => {
+    router.push('/productos')
+  }
 
-      {/* Categorías */}
-      <FilterSection title="Categorías" sectionKey="categorias">
-        <div className="space-y-2">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() =>
-                updateFilter(
-                  'categoria',
-                  currentFilters.categoria === category.slug ? null : category.slug
-                )
-              }
-              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
-                currentFilters.categoria === category.slug
-                  ? 'bg-pink-100 border-2 border-pink-600 text-pink-700'
-                  : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
-              }`}
-            >
-              {category.icon && <span className="text-2xl">{category.icon}</span>}
-              <span className="font-medium">{category.name}</span>
-              {currentFilters.categoria === category.slug && (
-                <svg
-                  className="w-5 h-5 ml-auto"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      </FilterSection>
+  const hasPriceFilter = 
+    (activeFilters.minPrice && activeFilters.minPrice !== priceRange.min) ||
+    (activeFilters.maxPrice && activeFilters.maxPrice !== priceRange.max)
 
-      {/* Tipos */}
-      {types.length > 0 && (
-        <FilterSection title="Tipos" sectionKey="tipos">
-          <div className="flex flex-wrap gap-2">
-            {types.map((type) => (
-              <button
-                key={type.id}
-                onClick={() =>
-                  updateFilter(
-                    'tipo',
-                    currentFilters.tipo === type.slug ? null : type.slug
-                  )
-                }
-                className={`px-4 py-2 rounded-full font-medium transition-all ${
-                  currentFilters.tipo === type.slug
-                    ? 'bg-pink-600 text-white shadow-lg scale-105'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                }`}
-              >
-                {type.name}
-              </button>
-            ))}
-          </div>
-        </FilterSection>
-      )}
-
-      {/* Ordenar */}
-      <FilterSection title="Ordenar por" sectionKey="orden">
-        <div className="space-y-2">
-          {[
-            { value: 'reciente', label: '✨ Más recientes' },
-            { value: 'precio-asc', label: '💰 Menor precio' },
-            { value: 'precio-desc', label: '💎 Mayor precio' },
-            { value: 'nombre', label: '🔤 Nombre (A-Z)' },
-          ].map((option) => (
-            <button
-              key={option.value}
-              onClick={() => updateFilter('orden', option.value)}
-              className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
-                (currentFilters.orden || 'reciente') === option.value
-                  ? 'bg-pink-100 border-2 border-pink-600 text-pink-700'
-                  : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
-              }`}
-            >
-              <span className="font-medium">{option.label}</span>
-              {(currentFilters.orden || 'reciente') === option.value && (
-                <svg
-                  className="w-5 h-5"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      </FilterSection>
-    </div>
-  )
+  const activeFiltersCount = [
+    activeFilters.category,
+    activeFilters.type,
+    activeFilters.sort && activeFilters.sort !== 'reciente' ? activeFilters.sort : null,
+    hasPriceFilter ? 'price' : null,
+  ].filter(Boolean).length
 
   return (
-    <>
-      {/* Desktop Filters */}
-      <div className="hidden lg:block sticky top-24">
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <FilterContent />
+    <div className="space-y-4">
+      {/* Filtros principales */}
+      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl flex items-center justify-center shadow-md">
+              <Filter className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Filtros</h2>
+              {activeFiltersCount > 0 && (
+                <p className="text-sm text-gray-500">
+                  {activeFiltersCount} {activeFiltersCount === 1 ? 'activo' : 'activos'}
+                </p>
+              )}
+            </div>
+          </div>
+          {activeFiltersCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-2 text-sm text-pink-600 hover:text-pink-700 font-medium transition hover:scale-105"
+            >
+              <X className="w-4 h-4" />
+              Limpiar todo
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Categoría */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <Tag className="w-4 h-4 text-pink-600" />
+              Categoría
+            </label>
+            <select
+              value={activeFilters.category || ''}
+              onChange={(e) => handleFilterChange('category', e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition text-gray-900 font-medium hover:border-pink-300"
+            >
+              <option value="">Todas</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon} {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tipo */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <Grid3x3 className="w-4 h-4 text-blue-600" />
+              Tipo
+            </label>
+            <select
+              value={activeFilters.type || ''}
+              onChange={(e) => handleFilterChange('type', e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-gray-900 font-medium hover:border-blue-300"
+            >
+              <option value="">Todos</option>
+              {types.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Ordenar */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <ArrowUpDown className="w-4 h-4 text-purple-600" />
+              Ordenar
+            </label>
+            <select
+              value={activeFilters.sort || 'reciente'}
+              onChange={(e) => handleFilterChange('sort', e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition text-gray-900 font-medium hover:border-purple-300"
+            >
+              <option value="reciente">📅 Recientes</option>
+              <option value="mas-vendidos">🔥 Más vendidos</option>
+              <option value="precio-asc">💰 Menor precio</option>
+              <option value="precio-desc">💎 Mayor precio</option>
+              <option value="nombre">🔤 A-Z</option>
+            </select>
+          </div>
+
+          {/* Precio */}
+          <PriceRangeSlider
+            minPrice={priceRange.min}
+            maxPrice={priceRange.max}
+            currentMin={activeFilters.minPrice}
+            currentMax={activeFilters.maxPrice}
+            onChange={handlePriceChange}
+          />
         </div>
       </div>
 
-      {/* Mobile Filter Button */}
-      <div className="lg:hidden fixed bottom-6 right-6 z-30">
-        <button
-          onClick={() => setShowMobileFilters(true)}
-          className="bg-pink-600 hover:bg-pink-700 text-white p-4 rounded-full shadow-2xl flex items-center gap-2"
-        >
-          <Filter className="w-6 h-6" />
-          {activeFiltersCount > 0 && (
-            <span className="bg-white text-pink-600 text-sm font-bold w-6 h-6 rounded-full flex items-center justify-center">
-              {activeFiltersCount}
-            </span>
+      {/* Chips de filtros activos */}
+      {activeFiltersCount > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {activeFilters.categoryName && (
+            <button
+              onClick={() => removeFilter('category')}
+              className="inline-flex items-center gap-2 bg-pink-100 text-pink-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-pink-200 transition group hover:scale-105"
+            >
+              <Tag className="w-3 h-3" />
+              {activeFilters.categoryName}
+              <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </button>
           )}
-        </button>
-      </div>
-
-      {/* Mobile Filters Drawer */}
-      {showMobileFilters && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-            onClick={() => setShowMobileFilters(false)}
-          />
-          <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white z-50 lg:hidden animate-slide-in-right overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Filtros</h2>
-                <button
-                  onClick={() => setShowMobileFilters(false)}
-                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              <FilterContent />
-              <button
-                onClick={() => setShowMobileFilters(false)}
-                className="w-full mt-6 bg-pink-600 hover:bg-pink-700 text-white py-4 rounded-xl font-bold"
-              >
-                Ver productos
-              </button>
-            </div>
-          </div>
-        </>
+          {activeFilters.typeName && (
+            <button
+              onClick={() => removeFilter('type')}
+              className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-blue-200 transition group hover:scale-105"
+            >
+              <Grid3x3 className="w-3 h-3" />
+              {activeFilters.typeName}
+              <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </button>
+          )}
+          {activeFilters.sort && activeFilters.sort !== 'reciente' && (
+            <button
+              onClick={() => removeFilter('sort')}
+              className="inline-flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-purple-200 transition group hover:scale-105"
+            >
+              <ArrowUpDown className="w-3 h-3" />
+              {
+                activeFilters.sort === 'mas-vendidos' ? '🔥 Más vendidos' :
+                activeFilters.sort === 'precio-asc' ? '💰 Menor precio' :
+                activeFilters.sort === 'precio-desc' ? '💎 Mayor precio' :
+                '🔤 Alfabético'
+              }
+              <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </button>
+          )}
+          {hasPriceFilter && (
+            <button
+              onClick={() => removeFilter('price')}
+              className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-green-200 transition group hover:scale-105"
+            >
+              💰 ${activeFilters.minPrice?.toLocaleString()} - ${activeFilters.maxPrice?.toLocaleString()}
+              <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </button>
+          )}
+        </div>
       )}
-    </>
+    </div>
   )
 }

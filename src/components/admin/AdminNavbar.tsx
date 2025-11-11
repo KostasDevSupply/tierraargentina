@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, Package, FolderTree, Home } from 'lucide-react'
+import { LogOut, Package, FolderTree, Home, FolderCheck, Pencil } from 'lucide-react'
 
 interface AdminNavbarProps {
   userEmail: string
@@ -54,6 +54,20 @@ export default function AdminNavbar({ userEmail }: AdminNavbarProps) {
               >
                 <FolderTree className="w-4 h-4" />
                 <span>Categorías</span>
+              </Link>
+              <Link
+                href="/admin/tipos"
+                className="flex items-center space-x-2 px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition"
+              >
+                <FolderCheck className="w-4 h-4" />
+                <span>Tipos</span>
+              </Link>
+              <Link
+                href="/admin/configuracion"
+                className="flex items-center space-x-2 px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition"
+              >
+                <Pencil className="w-4 h-4" />
+                <span>Barra de anuncios</span>
               </Link>
             </div>
           </div>

@@ -3,7 +3,7 @@
 import { X, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react'
 import { useCartStore, useWhatsAppMessage } from '@/lib/stores/cartStore'
 import Image from 'next/image'
-
+import Link from 'next/link'
 export default function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, removeItem, clearCart } =
     useCartStore()
@@ -67,12 +67,15 @@ export default function CartDrawer() {
               <p className="text-gray-600 mb-6">
                 ¡Agregá productos para comenzar!
               </p>
+              <Link href={"/productos"}>
               <button
                 onClick={closeCart}
                 className="bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition"
               >
                 Ver productos
               </button>
+              </Link>
+
             </div>
           ) : (
             <div className="space-y-4">

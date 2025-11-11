@@ -2,14 +2,13 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import '../globals.css'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('admin@tierraargentina.com')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
   const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -30,7 +29,6 @@ export default function LoginPage() {
       }
 
       if (data.session) {
-        // Forzar recarga completa de la página en /admin
         window.location.href = '/admin'
       } else {
         setError('No se pudo crear la sesión')
