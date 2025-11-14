@@ -39,11 +39,26 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
     .from('products')
     .select('price')
     .eq('is_active', true)
-    .order('price', { ascending: true })
+    // .order('price', { ascending: true })
+    .gt('price', 0)
 
   const prices = priceData?.map(p => p.price) || [0]
   const minPrice = Math.floor(Math.min(...prices))
   const maxPrice = Math.ceil(Math.max(...prices))
+
+  const minPriceFilter = params.min 
+      ? Math.max(minPrice, parseInt(params.min as string)) 
+      : minPrice
+    
+    const maxPriceFilter = params.max 
+      ? Math.min(maxPrice, parseInt(params.max as string)) 
+      : maxPrice
+
+    console.log('🔍 Price Filter Applied:', {
+      minPriceFilter,
+      maxPriceFilter,
+      fromURL: { min: params.min, max: params.max }
+    })
 
   // Query de productos con filtros
   let query = supabase
@@ -67,8 +82,8 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
   }
 
   // ✅ Filtro de precio
-  const minPriceFilter = params.min ? parseInt(params.min as string) : minPrice
-  const maxPriceFilter = params.max ? parseInt(params.max as string) : maxPrice
+   query = query.gte('price', minPriceFilter)
+   query = query.lte('price', maxPriceFilter)
 
   query = query
     .gte('price', minPriceFilter)

@@ -27,160 +27,220 @@ interface ImageManagerProps {
 interface UploadingFile {
   file: File
   status: 'pending' | 'uploading' | 'success' | 'error'
-  progress?: number
   error?: string
   tempId: string
+  retries?: number
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const ACCEPTED_IMAGE_TYPES = {
   'image/*': ['.jpeg', '.jpg', '.png', '.webp']
 }
-const UPLOAD_DELAY_MS = 300
-const SUCCESS_MESSAGE_DELAY_MS = 3000
+const UPLOAD_DELAY_MS = 500
+const SUCCESS_MESSAGE_DELAY_MS = 2000
+const MAX_RETRIES = 3
+const SESSION_REFRESH_INTERVAL = 5 // Refrescar cada 5 uploads
 
-export default function ImageManager({ 
-  productId, 
+export default function ImageManager({
+  productId,
   initialImages = [],
-  onImagesChange 
+  onImagesChange
 }: ImageManagerProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  
+
   const [images, setImages] = useState<ProductImage[]>(initialImages)
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // Sincronizar con initialImages cuando cambian
+  // ✅ FIX: Sincronizar con initialImages
   useEffect(() => {
     setImages(initialImages)
   }, [initialImages])
 
-  // Estadísticas de subida
+  // ✅ FIX: Notificar cambios FUERA del render usando useEffect
+  useEffect(() => {
+    onImagesChange?.(images)
+  }, [images, onImagesChange])
+
+  // Estadísticas
   const uploadStats = useMemo(() => ({
     isUploading: uploadingFiles.length > 0,
     uploadedCount: uploadingFiles.filter(f => f.status === 'success').length,
+    errorCount: uploadingFiles.filter(f => f.status === 'error').length,
     totalCount: uploadingFiles.length,
-    progress: uploadingFiles.length > 0 
-      ? (uploadingFiles.filter(f => f.status === 'success').length / uploadingFiles.length) * 100 
+    progress: uploadingFiles.length > 0
+      ? (uploadingFiles.filter(f => f.status === 'success').length / uploadingFiles.length) * 100
       : 0
   }), [uploadingFiles])
 
   // Imágenes ordenadas
-  const sortedImages = useMemo(() => 
+  const sortedImages = useMemo(() =>
     [...images].sort((a, b) => a.order_index - b.order_index),
     [images]
   )
 
-  // Handler para subir archivos
-const handleUpload = useCallback(async (file: File, tempId: string): Promise<ProductImage> => {
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-    
-    if (productId) {
-      formData.append('productId', productId)
+  // ✅ Refrescar sesión con control de timing
+  const refreshSession = useCallback(async () => {
+    try {
+      const { error } = await supabase.auth.refreshSession()
+      if (error) throw error
+      console.log('✅ Sesión refrescada')
+      return true
+    } catch (error) {
+      console.error('❌ Error refrescando sesión:', error)
+      return false
     }
+  }, [supabase])
 
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-      credentials: 'include',
-    })
+  // ✅ Upload con retry automático
+  const handleUpload = useCallback(async (
+    file: File, 
+    tempId: string, 
+    retryCount = 0
+  ): Promise<ProductImage> => {
+    try {
+      if (retryCount > 0) {
+        setUploadingFiles(prev => prev.map(f =>
+          f.tempId === tempId ? { ...f, retries: retryCount } : f
+        ))
+      }
 
-    if (response.status === 401) {
-      throw new Error('Sesión expirada. Por favor recarga la página.')
+      const formData = new FormData()
+      formData.append('file', file)
+      if (productId) formData.append('productId', productId)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      // Token expirado
+      if (response.status === 401) {
+        if (retryCount < MAX_RETRIES) {
+          console.log(`🔄 Token expirado. Refrescando... (${retryCount + 1}/${MAX_RETRIES})`)
+          const refreshed = await refreshSession()
+          if (refreshed) {
+            await new Promise(r => setTimeout(r, 1000))
+            return handleUpload(file, tempId, retryCount + 1)
+          }
+        }
+        throw new Error('Sesión expirada. Recarga la página.')
+      }
+
+      // Rate limit
+      if (response.status === 429) {
+        if (retryCount < MAX_RETRIES) {
+          const wait = 2000 * Math.pow(1.5, retryCount)
+          console.log(`⏳ Rate limit. Esperando ${Math.round(wait)}ms...`)
+          await new Promise(r => setTimeout(r, wait))
+          return handleUpload(file, tempId, retryCount + 1)
+        }
+        throw new Error('Servidor ocupado. Intenta más tarde.')
+      }
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Error al subir')
+      }
+
+      return {
+        id: result.image?.id,
+        url: result.image?.url || result.url,
+        filename: result.image?.filename || file.name,
+        order_index: images.length,
+        is_primary: images.length === 0,
+      } as ProductImage
+    } catch (error: any) {
+      if (retryCount < MAX_RETRIES && !error.message.includes('Recarga')) {
+        await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)))
+        return handleUpload(file, tempId, retryCount + 1)
+      }
+      throw error
     }
+  }, [productId, images.length, refreshSession])
 
-    const result = await response.json()
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || 'Error al subir archivo')
-    }
-
-    // ✅ Cast explícito a ProductImage
-    return {
-      id: result.image?.id,
-      url: result.image?.url || result.url,
-      filename: result.image?.filename || file.name,
-      order_index: images.length,
-      is_primary: images.length === 0,
-    } as ProductImage  // ✅ AGREGAR ESTE CAST
-  } catch (error) {
-    throw error
-  }
-}, [productId, images.length])
-
-  // Drop handler optimizado
+  // ✅ Drop handler SIN límites
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return
 
     console.log('📦 Iniciando subida de', acceptedFiles.length, 'archivos')
+    
+    // Refrescar sesión al inicio
+    await refreshSession()
 
-    // Crear tracking de archivos
     const filesWithStatus: UploadingFile[] = acceptedFiles.map(file => ({
       file,
       status: 'pending',
-      tempId: `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      tempId: `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      retries: 0
     }))
 
     setUploadingFiles(filesWithStatus)
 
-    // Procesar archivos secuencialmente
+    let successCount = 0
+
     for (let i = 0; i < acceptedFiles.length; i++) {
       const file = acceptedFiles[i]
       const tempId = filesWithStatus[i].tempId
 
-      // Marcar como uploading
-      setUploadingFiles(prev => prev.map(f => 
+      setUploadingFiles(prev => prev.map(f =>
         f.tempId === tempId ? { ...f, status: 'uploading' } : f
       ))
 
       try {
         const newImage = await handleUpload(file, tempId)
 
-        // Marcar como éxito
-        setUploadingFiles(prev => prev.map(f => 
+        setUploadingFiles(prev => prev.map(f =>
           f.tempId === tempId ? { ...f, status: 'success' } : f
         ))
 
-        // Agregar a la lista
-        setImages(prev => {
-          const updated = [...prev, newImage]
-          onImagesChange?.(updated)
-          return updated
-        })
-
-        console.log('✅ Archivo subido:', file.name)
-      } catch (error: any) {
-        console.error('❌ Error subiendo:', file.name, error)
+        // ✅ Actualizar sin llamar callback directamente
+        setImages(prev => [...prev, newImage])
         
-        setUploadingFiles(prev => prev.map(f => 
-          f.tempId === tempId 
-            ? { ...f, status: 'error', error: error.message || 'Error desconocido' } 
+        successCount++
+        console.log(`✅ ${successCount}/${acceptedFiles.length}: ${file.name}`)
+      } catch (error: any) {
+        console.error(`❌ ${file.name}:`, error)
+
+        setUploadingFiles(prev => prev.map(f =>
+          f.tempId === tempId
+            ? { ...f, status: 'error', error: error.message }
             : f
         ))
 
-        toast.error(`Error al subir ${file.name}`)
+        toast.error(`Error: ${file.name}`, { duration: 3000 })
       }
 
-      // Delay entre archivos
+      // Delay entre uploads
       if (i < acceptedFiles.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, UPLOAD_DELAY_MS))
+        await new Promise(r => setTimeout(r, UPLOAD_DELAY_MS))
+      }
+
+      // ✅ Refrescar sesión preventivamente cada N uploads
+      if ((i + 1) % SESSION_REFRESH_INTERVAL === 0 && i < acceptedFiles.length - 1) {
+        console.log('🔄 Refrescando sesión preventiva...')
+        await refreshSession()
       }
     }
 
-    // Limpiar después del delay
+    // Mensaje final
     setTimeout(() => {
-      setUploadingFiles([])
-      if (productId) {
-        router.refresh()
+      const errorCount = uploadingFiles.filter(f => f.status === 'error').length
+      if (errorCount === 0) {
+        toast.success(`✅ ${successCount} imágenes subidas`, { duration: 4000 })
+      } else {
+        toast.error(`⚠️ ${successCount} ok, ${errorCount} errores`, { duration: 5000 })
       }
+      
+      setUploadingFiles([])
+      if (productId) router.refresh()
     }, SUCCESS_MESSAGE_DELAY_MS)
 
-  }, [handleUpload, onImagesChange, productId, router])
+  }, [handleUpload, productId, router, refreshSession, uploadingFiles])
 
-  // Configuración de dropzone
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: ACCEPTED_IMAGE_TYPES,
@@ -189,69 +249,45 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
     multiple: true
   })
 
-  // Eliminar imagen
+  // ✅ Eliminar imagen
   const handleDelete = useCallback(async (imageId: string) => {
     if (!confirm('¿Eliminar esta imagen?')) return
 
     setDeletingId(imageId)
 
     try {
-      // Sin productId, solo estado local
       if (!productId) {
-        setImages(prev => {
-          const updated = prev.filter(img => img.id !== imageId)
-          onImagesChange?.(updated)
-          return updated
-        })
+        setImages(prev => prev.filter(img => img.id !== imageId))
         return
       }
 
-      // Obtener datos de la imagen
-      const { data: imageData, error: fetchError } = await supabase
+      const { data: imageData } = await supabase
         .from('product_images')
         .select('storage_path')
         .eq('id', imageId)
         .single()
 
-      if (fetchError || !imageData) {
-        throw new Error('Imagen no encontrada')
+      if (imageData?.storage_path) {
+        await supabase.storage
+          .from('product-images')
+          .remove([imageData.storage_path])
       }
 
-      // Eliminar de storage
-      const { error: storageError } = await supabase.storage
-        .from('product-images')
-        .remove([imageData.storage_path])
+      await supabase.from('product_images').delete().eq('id', imageId)
 
-      if (storageError) {
-        console.warn('Error al eliminar de storage:', storageError)
-      }
-
-      // Eliminar de DB
-      const { error: dbError } = await supabase
-        .from('product_images')
-        .delete()
-        .eq('id', imageId)
-
-      if (dbError) throw dbError
-
-      // Actualizar estado
-      setImages(prev => {
-        const updated = prev.filter(img => img.id !== imageId)
-        onImagesChange?.(updated)
-        return updated
-      })
+      setImages(prev => prev.filter(img => img.id !== imageId))
 
       toast.success('Imagen eliminada')
       router.refresh()
     } catch (error: any) {
       console.error('Error al eliminar:', error)
-      toast.error(error.message || 'Error al eliminar imagen')
+      toast.error('Error al eliminar imagen')
     } finally {
       setDeletingId(null)
     }
-  }, [productId, supabase, onImagesChange, router])
+  }, [productId, supabase, router])
 
-  // Mover imagen
+  // ✅ Mover imagen
   const handleMove = useCallback(async (imageId: string, direction: 'left' | 'right') => {
     const currentIndex = images.findIndex(img => img.id === imageId)
     if (currentIndex === -1) return
@@ -259,43 +295,36 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
     const newIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1
     if (newIndex < 0 || newIndex >= images.length) return
 
-    // Reordenar
     const reordered = [...images]
     const [movedImage] = reordered.splice(currentIndex, 1)
     reordered.splice(newIndex, 0, movedImage)
 
-    // Actualizar order_index
-    const updated = reordered.map((img, idx) => ({
-      ...img,
-      order_index: idx
-    }))
+    const updated = reordered.map((img, idx) => ({ ...img, order_index: idx }))
 
     setImages(updated)
-    onImagesChange?.(updated)
 
-    // Persistir en DB si hay productId
     if (!productId) return
 
     try {
-      const updates = updated
-        .filter(img => img.id)
-        .map(img => 
-          supabase
-            .from('product_images')
-            .update({ order_index: img.order_index })
-            .eq('id', img.id!)
-        )
-      
-      await Promise.all(updates)
+      await Promise.all(
+        updated
+          .filter(img => img.id)
+          .map(img =>
+            supabase
+              .from('product_images')
+              .update({ order_index: img.order_index })
+              .eq('id', img.id!)
+          )
+      )
       toast.success('Orden actualizado')
     } catch (error) {
-      console.error('Error al reordenar:', error)
-      toast.error('Error al actualizar orden')
-      setImages(images) // Rollback
+      console.error('Error:', error)
+      toast.error('Error al reordenar')
+      setImages(images)
     }
-  }, [images, productId, supabase, onImagesChange])
+  }, [images, productId, supabase])
 
-  // Marcar como principal
+  // ✅ Marcar principal
   const handleSetPrimary = useCallback(async (imageId: string) => {
     const updated = images.map(img => ({
       ...img,
@@ -303,34 +332,28 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
     }))
 
     setImages(updated)
-    onImagesChange?.(updated)
 
-    // Sin productId, solo estado local
     if (!productId) return
 
     try {
-      // Desmarcar todas
       await supabase
         .from('product_images')
         .update({ is_primary: false })
         .eq('product_id', productId)
 
-      // Marcar la seleccionada
-      const { error } = await supabase
+      await supabase
         .from('product_images')
         .update({ is_primary: true })
         .eq('id', imageId)
 
-      if (error) throw error
-
       toast.success('Imagen principal actualizada')
       router.refresh()
     } catch (error: any) {
-      console.error('Error al marcar principal:', error)
-      toast.error('Error al actualizar imagen principal')
-      setImages(images) // Rollback
+      console.error('Error:', error)
+      toast.error('Error al marcar principal')
+      setImages(images)
     }
-  }, [images, productId, supabase, onImagesChange, router])
+  }, [images, productId, supabase, router])
 
   return (
     <div className="space-y-6">
@@ -338,17 +361,17 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
       <div
         {...getRootProps()}
         className={`
-          relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer 
+          relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer
           transition-all duration-200
-          ${isDragActive 
-            ? 'border-blue-500 bg-blue-50 scale-[1.02]' 
+          ${isDragActive
+            ? 'border-blue-500 bg-blue-50 scale-[1.02]'
             : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
           }
           ${uploadStats.isUploading ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}
         `}
       >
         <input {...getInputProps()} />
-        
+
         <div className="flex flex-col items-center">
           {uploadStats.isUploading ? (
             <>
@@ -357,11 +380,16 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                 Subiendo {uploadStats.uploadedCount} de {uploadStats.totalCount}
               </p>
               <div className="w-full max-w-xs bg-gray-200 rounded-full h-3 overflow-hidden">
-                <div 
-                  className="bg-blue-500 h-full rounded-full transition-all duration-300" 
-                  style={{ width: `${uploadStats.progress}%` }} 
+                <div
+                  className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${uploadStats.progress}%` }}
                 />
               </div>
+              {uploadStats.errorCount > 0 && (
+                <p className="text-xs text-red-600 mt-2 font-medium">
+                  {uploadStats.errorCount} error(es)
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -402,21 +430,24 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                       <p className="text-xs text-gray-500">Esperando...</p>
                     </div>
                   )}
-                  
+
                   {file.status === 'uploading' && (
                     <div className="text-center">
                       <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-2" />
                       <p className="text-xs text-gray-600 font-medium">Subiendo...</p>
+                      {file.retries && file.retries > 0 && (
+                        <p className="text-xs text-amber-600 mt-1">Intento {file.retries}/{MAX_RETRIES}</p>
+                      )}
                     </div>
                   )}
-                  
+
                   {file.status === 'success' && (
                     <div className="text-center">
                       <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-2" />
                       <p className="text-xs text-green-600 font-medium">¡Listo!</p>
                     </div>
                   )}
-                  
+
                   {file.status === 'error' && (
                     <div className="text-center px-4">
                       <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-2" />
@@ -448,8 +479,8 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                 key={image.id || `temp-${index}`}
                 className={`
                   group relative bg-white border-2 rounded-xl overflow-hidden transition-all
-                  ${deletingId === image.id 
-                    ? 'opacity-50 scale-95' 
+                  ${deletingId === image.id
+                    ? 'opacity-50 scale-95'
                     : 'hover:border-blue-400 hover:shadow-lg'
                   }
                 `}
@@ -461,7 +492,7 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                     className="w-full h-full object-cover"
                     loading="lazy"
                   />
-                  
+
                   {image.is_primary && (
                     <div className="absolute top-3 left-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-lg">
                       <Star className="w-3.5 h-3.5 fill-current" />
@@ -488,7 +519,6 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                       disabled={index === 0 || deletingId === image.id || !image.id}
                       className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition"
                       title="Mover izquierda"
-                      aria-label="Mover imagen a la izquierda"
                     >
                       <ChevronLeft className="w-4 h-4 text-gray-700 mx-auto" />
                     </button>
@@ -499,11 +529,10 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                       disabled={image.is_primary || deletingId === image.id || !image.id}
                       className="p-2 rounded-lg bg-yellow-50 hover:bg-yellow-100 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition"
                       title="Marcar como principal"
-                      aria-label="Marcar como imagen principal"
                     >
                       <Star className={`w-4 h-4 mx-auto ${
-                        image.is_primary 
-                          ? 'fill-yellow-500 text-yellow-500' 
+                        image.is_primary
+                          ? 'fill-yellow-500 text-yellow-500'
                           : 'text-yellow-600'
                       }`} />
                     </button>
@@ -514,7 +543,6 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                       disabled={deletingId === image.id || !image.id}
                       className="p-2 rounded-lg bg-red-50 hover:bg-red-100 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition"
                       title="Eliminar imagen"
-                      aria-label="Eliminar imagen"
                     >
                       {deletingId === image.id ? (
                         <Loader2 className="w-4 h-4 text-red-600 mx-auto animate-spin" />
@@ -529,7 +557,6 @@ const handleUpload = useCallback(async (file: File, tempId: string): Promise<Pro
                       disabled={index === sortedImages.length - 1 || deletingId === image.id || !image.id}
                       className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition"
                       title="Mover derecha"
-                      aria-label="Mover imagen a la derecha"
                     >
                       <ChevronRight className="w-4 h-4 text-gray-700 mx-auto" />
                     </button>

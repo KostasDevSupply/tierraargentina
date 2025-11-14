@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ShoppingCart, ChevronLeft, ChevronRight, Tag } from 'lucide-react'
 import type { Product } from '@/types'
 
 interface ProductCardProps {
@@ -52,7 +52,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
 
-          {/* Flechas */}
+          {/* Flechas minimalistas */}
           {hasMultipleImages && (
             <>
               <button
@@ -86,12 +86,20 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Info */}
         <div className="p-4 space-y-2">
-          {/* Categoría */}
-          {product.category?.name && (
-            <span className="inline-block text-xs font-semibold text-pink-600 bg-pink-50 px-2 py-1 rounded">
-              {product.category.name}
-            </span>
-          )}
+          {/* ✅ Tags: Categoría + Tipo */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {product.category?.name && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600 bg-pink-50 px-2 py-1 rounded-md">
+                <Tag className="w-3 h-3" />
+                {product.category.name}
+              </span>
+            )}
+            {product.type?.name && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+                {product.type.name}
+              </span>
+            )}
+          </div>
 
           {/* Título */}
           <h3 className="font-bold text-gray-900 line-clamp-2 group-hover:text-pink-600 transition-colors min-h-[3rem]">
@@ -107,7 +115,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             <p className="text-sm font-semibold text-gray-500">Consultar precio</p>
           )}
 
-          {/* ✅ TALLES */}
+          {/* Talles */}
           {hasSizes && (
             <div className="pt-2 border-t border-gray-100">
               <div className="flex items-center justify-between mb-2">
