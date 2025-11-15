@@ -12,10 +12,15 @@ interface ProductCardProps {
 export default function ProductCard({ product }: ProductCardProps) {
   const images = product.images || []
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [hoveredColor, setHoveredColor] = useState<string | null>(null)
 
   const hasSizes = product.sizes && product.sizes.length > 0
   const hasMultipleImages = images.length > 1
-  const availableSizes = product.sizes?.filter(s => s.in_stock).slice(0, 4) || []
+  const availableSizes = product.sizes?.filter((s) => s.in_stock).slice(0, 4) || []
+  
+  // ✅ Obtener colores
+  const colors = product.colors || []
+  const hasColors = colors.length > 0
 
   const handlePrevImage = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -32,10 +37,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const currentImage = images[currentImageIndex]
 
   return (
-    <Link
-      href={`/productos/${product.slug}`}
-      className="block group"
-    >
+    <Link href={`/productos/${product.slug}`} className="block group">
       <article className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
         {/* Imagen con Carrusel */}
         <div className="relative aspect-square bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
@@ -52,7 +54,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
 
-          {/* Flechas minimalistas */}
+          {/* Flechas */}
           {hasMultipleImages && (
             <>
               <button
@@ -86,7 +88,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Info */}
         <div className="p-4 space-y-2">
-          {/* ✅ Tags: Categoría + Tipo */}
+          {/* Tags: Categoría + Tipo */}
           <div className="flex items-center gap-2 flex-wrap">
             {product.category?.name && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600 bg-pink-50 px-2 py-1 rounded-md">
@@ -115,43 +117,89 @@ export default function ProductCard({ product }: ProductCardProps) {
             <p className="text-sm font-semibold text-gray-500">Consultar precio</p>
           )}
 
-          {/* Talles */}
-          {hasSizes && (
-            <div className="pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-700">Talles:</span>
-                <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${
-                    availableSizes.length > 0 ? 'bg-green-500' : 'bg-red-500'
-                  }`} />
+          {/* ✅ Colores y Talles */}
+          <div className="pt-2 border-t border-gray-100 space-y-2">
+            {/* Colores */}
+            {hasColors && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-gray-700">Colores:</span>
                   <span className="text-xs text-gray-600">
-                    {availableSizes.length > 0 
-                      ? `${availableSizes.length} disponibles`
-                      : 'Sin stock'
-                    }
+                    {colors.length} disponible{colors.length !== 1 ? 's' : ''}
                   </span>
                 </div>
-              </div>
-
-              {availableSizes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {availableSizes.map((sizeObj) => (
-                    <span
-                      key={sizeObj.size}
-                      className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold bg-gradient-to-br from-gray-100 to-gray-200 text-gray-800 rounded-md border border-gray-300 shadow-sm"
-                    >
-                      {sizeObj.size}
-                    </span>
-                  ))}
-                  {product.sizes && product.sizes.length > 4 && (
-                    <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold bg-gradient-to-br from-pink-500 to-rose-500 text-white rounded-md shadow-sm">
-                      +{product.sizes.length - 4}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {colors.slice(0, 6).map((color: any) => {
+                    const isHovered = hoveredColor === color.id
+                    return (
+                      <div key={color.id} className="relative">
+                        {/* ✅ FIX: Prevenir navegación al hacer click en color */}
+                        <div
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                          }}
+                          onMouseEnter={() => setHoveredColor(color.id)}
+                          onMouseLeave={() => setHoveredColor(null)}
+                          className="w-6 h-6 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-300 hover:ring-gray-400 transition-transform hover:scale-110 cursor-default"
+                          style={{ backgroundColor: color.hex_code }}
+                        />
+                        {isHovered && (
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap z-20 pointer-events-none">
+                            {color.name}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-[3px] border-transparent border-t-gray-900" />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {colors.length > 6 && (
+                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold bg-gradient-to-br from-pink-500 to-rose-500 text-white rounded-md shadow-sm">
+                      +{colors.length - 6}
                     </span>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+
+            {/* Talles */}
+            {hasSizes && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-gray-700">Talles:</span>
+                  <div className="flex items-center gap-1">
+                    <div className={`w-2 h-2 rounded-full ${
+                      availableSizes.length > 0 ? 'bg-green-500' : 'bg-red-500'
+                    }`} />
+                    <span className="text-xs text-gray-600">
+                      {availableSizes.length > 0 
+                        ? `${availableSizes.length} disponibles`
+                        : 'Sin stock'
+                      }
+                    </span>
+                  </div>
+                </div>
+
+                {availableSizes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableSizes.map((sizeObj) => (
+                      <span
+                        key={sizeObj.size}
+                        className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold bg-gradient-to-br from-gray-100 to-gray-200 text-gray-800 rounded-md border border-gray-300 shadow-sm"
+                      >
+                        {sizeObj.size}
+                      </span>
+                    ))}
+                    {product.sizes && product.sizes.length > 4 && (
+                      <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold bg-gradient-to-br from-pink-500 to-rose-500 text-white rounded-md shadow-sm">
+                        +{product.sizes.length - 4}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </article>
     </Link>

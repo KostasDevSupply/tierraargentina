@@ -8,6 +8,7 @@ export interface CartItem {
   slug: string
   price: number
   size: string | null
+  color?: string | null  // ✅ AGREGADO
   quantity: number
   image: string | null
   category?: string
@@ -127,6 +128,9 @@ export const useWhatsAppMessage = () => {
 
     items.forEach((item) => {
       message += `\n${item.quantity}x ${item.name}\n`
+      if (item.color) {
+        message += `   Color: ${item.color}\n`
+      }
       if (item.size) {
         message += `   Talle: ${item.size}\n`
       }

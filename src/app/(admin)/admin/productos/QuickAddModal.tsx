@@ -9,7 +9,7 @@ interface QuickAddModalProps {
   isOpen: boolean
   onClose: () => void
   type: 'category' | 'type'
-  onSuccess: () => void
+  onSuccess: (createdId?: string) => void
 }
 
 export default function QuickAddModal({
@@ -54,7 +54,11 @@ export default function QuickAddModal({
         if (description.trim()) data.description = description.trim()
       }
 
-      const { error } = await supabase.from(table).insert(data)
+      const { data: created, error } = await supabase
+        .from(table)
+        .insert(data)
+        .select('id')
+        .single()
 
       if (error) throw error
 
@@ -67,13 +71,23 @@ export default function QuickAddModal({
       setIcon(type === 'category' ? '📦' : '')
       setDescription('')
       
-      onSuccess()
+      // Pasar el ID creado
+      onSuccess(created?.id)
       onClose()
     } catch (error: any) {
       console.error('Error:', error)
       toast.error(error.message || 'Error al crear')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleClose = () => {
+    if (!loading) {
+      setName('')
+      setIcon(type === 'category' ? '📦' : '')
+      setDescription('')
+      onClose()
     }
   }
 
@@ -88,7 +102,7 @@ export default function QuickAddModal({
             {type === 'category' ? 'Nueva Categoría' : 'Nuevo Tipo'}
           </h3>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={loading}
             className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
           >
@@ -160,7 +174,7 @@ export default function QuickAddModal({
           <div className="flex justify-end gap-3 pt-4 border-t">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={loading}
               className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition"
             >

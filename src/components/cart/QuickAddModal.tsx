@@ -9,7 +9,7 @@ interface QuickAddModalProps {
   isOpen: boolean
   onClose: () => void
   type: 'category' | 'type'
-  onSuccess: () => void
+  onSuccess: (createdId?: string) => void
 }
 
 export default function QuickAddModal({
@@ -51,11 +51,14 @@ export default function QuickAddModal({
 
       if (type === 'category') {
         if (icon) data.icon = icon
-        // ✅ Agregar descripción
         if (description.trim()) data.description = description.trim()
       }
 
-      const { error } = await supabase.from(table).insert(data)
+      const { data: created, error } = await supabase
+        .from(table)
+        .insert(data)
+        .select('id')
+        .single()
 
       if (error) throw error
 
@@ -63,12 +66,13 @@ export default function QuickAddModal({
         type === 'category' ? 'Categoría creada' : 'Tipo creado'
       )
       
-      // Limpiar form
+      // Limpiar formulario
       setName('')
       setIcon(type === 'category' ? '📦' : '')
       setDescription('')
       
-      onSuccess()
+      // Pasar el ID creado
+      onSuccess(created?.id)
       onClose()
     } catch (error: any) {
       console.error('Error:', error)
@@ -78,23 +82,35 @@ export default function QuickAddModal({
     }
   }
 
+  const handleClose = () => {
+    if (!loading) {
+      setName('')
+      setIcon(type === 'category' ? '📦' : '')
+      setDescription('')
+      onClose()
+    }
+  }
+
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-lg font-bold text-gray-900">
             {type === 'category' ? 'Nueva Categoría' : 'Nuevo Tipo'}
           </h3>
           <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            onClick={handleClose}
+            disabled={loading}
+            className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
+        {/* Form */}
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {/* Nombre */}
           <div>
@@ -108,11 +124,7 @@ export default function QuickAddModal({
               required
               disabled={loading}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-              placeholder={
-                type === 'category'
-                  ? 'Ej: Conjuntos'
-                  : 'Ej: Dama'
-              }
+              placeholder={type === 'category' ? 'Ej: Conjuntos, Ponchos' : 'Ej: Dama, Caballero'}
             />
           </div>
 
@@ -137,7 +149,7 @@ export default function QuickAddModal({
             </div>
           )}
 
-          {/* ✅ DESCRIPCIÓN - NUEVO - Solo para categorías */}
+          {/* Descripción - Solo para categorías */}
           {type === 'category' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -162,7 +174,7 @@ export default function QuickAddModal({
           <div className="flex justify-end gap-3 pt-4 border-t">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={loading}
               className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition"
             >

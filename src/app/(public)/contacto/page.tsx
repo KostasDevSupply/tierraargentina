@@ -59,7 +59,7 @@ export default function ContactoPage() {
                      href="mailto:info@tierrargentina.com.ar"
                     className="text-blue-600 font-semibold hover:underline"
                   >
-                    info@nerinalenceria.com.ar
+                    tierraargentina@gmail.com
                   </a>
                 </div>
               </div>

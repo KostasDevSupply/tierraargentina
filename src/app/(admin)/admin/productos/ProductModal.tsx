@@ -2,11 +2,21 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Save, Image as ImageIcon, Tag, Ruler, Plus } from 'lucide-react'
+import { X, Save, Package } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import ImageManager from '../ImageManager'
 import QuickAddModal from './QuickAddModal'
+import QuickAddColorModal from './QuickAddColorModal'
+import SizeSelector from './SizeSelector'
+import ColorSelector from '@/components/ui/ColorSelector'
+import PriceInput from '@/components/ui/PriceInput'
 import type { ProductImage } from '@/types'
 
 interface ProductModalProps {
@@ -26,23 +36,43 @@ interface FormData {
   is_featured: boolean
 }
 
-const COMMON_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '1', '2', '3', '4', '85', '90', '95', '100'] as const
+// Toggle Switch Component
+function Toggle({ checked, onChange, label, description, disabled }: any) {
+  return (
+    <div className="flex items-center justify-between py-3">
+      <div className="space-y-0.5">
+        <p className="text-sm font-medium">{label}</p>
+        {description && <p className="text-xs text-gray-500">{description}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={() => !disabled && onChange(!checked)}
+        disabled={disabled}
+        className={`
+          relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+          ${checked ? 'bg-blue-600' : 'bg-gray-300'}
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+        `}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
+    </div>
+  )
+}
 
 export default function ProductModal({ isOpen, onClose, product }: ProductModalProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   
-  // Estados
+  // States
   const [loading, setLoading] = useState(false)
   const [categories, setCategories] = useState<any[]>([])
   const [types, setTypes] = useState<any[]>([])
-  const [uploadedImages, setUploadedImages] = useState<ProductImage[]>([])
+  const [colors, setColors] = useState<any[]>([])
+  const [images, setImages] = useState<ProductImage[]>([])
   const [sizes, setSizes] = useState<string[]>([])
-  const [newSize, setNewSize] = useState('')
-  const [showQuickAddCategory, setShowQuickAddCategory] = useState(false)
-  const [showQuickAddType, setShowQuickAddType] = useState(false)
+  const [colorIds, setColorIds] = useState<string[]>([])
   
-  // Form data inicial
   const [formData, setFormData] = useState<FormData>({
     name: '',
     slug: '',
@@ -54,14 +84,18 @@ export default function ProductModal({ isOpen, onClose, product }: ProductModalP
     is_featured: false,
   })
 
-  // Cargar datos iniciales
+  const [modals, setModals] = useState({ category: false, type: false, color: false })
+
+  // Load initial data
   useEffect(() => {
     if (isOpen) {
-      loadInitialData()
+      loadCategories()
+      loadTypes()
+      loadColors()
     }
   }, [isOpen])
 
-  // Actualizar form cuando cambia product
+  // Populate form when editing
   useEffect(() => {
     if (product) {
       setFormData({
@@ -75,27 +109,28 @@ export default function ProductModal({ isOpen, onClose, product }: ProductModalP
         is_featured: product.is_featured ?? false,
       })
       setSizes(product.sizes?.map((s: any) => s.size) || [])
-      setUploadedImages(product.images || [])
+      setImages(product.images || [])
+      
+      // Load colors
+      if (product.product_colors?.length > 0) {
+        setColorIds(product.product_colors.map((pc: any) => pc.color_id))
+      } else if (product.colors?.length > 0) {
+        setColorIds(product.colors.map((c: any) => c.id))
+      } else {
+        setColorIds([])
+      }
     } else {
       resetForm()
     }
   }, [product])
 
-  // Funciones de carga
-  const loadInitialData = async () => {
-    await Promise.all([
-      loadCategories(),
-      loadTypes()
-    ])
-  }
-
+  // Load functions
   const loadCategories = async () => {
     const { data } = await supabase
       .from('categories')
       .select('*')
       .eq('is_active', true)
       .order('name')
-    
     setCategories(data || [])
   }
 
@@ -105,12 +140,20 @@ export default function ProductModal({ isOpen, onClose, product }: ProductModalP
       .select('*')
       .eq('is_active', true)
       .order('name')
-    
     setTypes(data || [])
   }
 
-  // Utilidades
-  const generateSlug = useCallback((name: string): string => {
+  const loadColors = async () => {
+    const { data } = await supabase
+      .from('colors')
+      .select('*')
+      .eq('is_active', true)
+      .order('name')
+    setColors(data || [])
+  }
+
+  // Utility functions
+  const generateSlug = useCallback((name: string) => {
     return name
       .toLowerCase()
       .normalize('NFD')
@@ -133,47 +176,66 @@ export default function ProductModal({ isOpen, onClose, product }: ProductModalP
       is_featured: false,
     })
     setSizes([])
-    setUploadedImages([])
-    setNewSize('')
+    setImages([])
+    setColorIds([])
   }
 
   // Handlers
-  const handleNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value
-    setFormData(prev => ({
-      ...prev,
-      name,
-      slug: generateSlug(name),
-    }))
-  }, [generateSlug])
+    setFormData(prev => ({ ...prev, name, slug: generateSlug(name) }))
+  }
 
-  const handleAddSize = useCallback((size: string) => {
-    if (size && !sizes.includes(size)) {
-      setSizes(prev => [...prev, size])
-      setNewSize('')
+  const updateField = (field: keyof FormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const openModal = (type: 'category' | 'type' | 'color') => {
+    setModals(prev => ({ ...prev, [type]: true }))
+  }
+
+  const closeModal = (type: 'category' | 'type' | 'color') => {
+    setModals(prev => ({ ...prev, [type]: false }))
+  }
+
+  // Quick Add Success Handler
+  const handleQuickAddSuccess = useCallback(async (type: 'category' | 'type' | 'color', createdId?: string) => {
+    closeModal(type)
+    
+    console.log(`Quick Add Success - Type: ${type}, ID: ${createdId}`)
+    
+    // CRITICAL: Set ID first, then reload
+    if (createdId) {
+      if (type === 'category') {
+        setFormData(prev => ({ ...prev, category_id: createdId }))
+        console.log('Category ID set:', createdId)
+        await new Promise(resolve => setTimeout(resolve, 100))
+        await loadCategories()
+      } else if (type === 'type') {
+        setFormData(prev => ({ ...prev, type_id: createdId }))
+        console.log('Type ID set:', createdId)
+        await new Promise(resolve => setTimeout(resolve, 100))
+        await loadTypes()
+      } else if (type === 'color') {
+        setColorIds(prev => {
+          const newIds = [...prev, createdId]
+          console.log('Color IDs updated:', newIds)
+          return newIds
+        })
+        await loadColors()
+      }
+    } else {
+      // No ID returned, just reload
+      if (type === 'category') await loadCategories()
+      else if (type === 'type') await loadTypes()
+      else if (type === 'color') await loadColors()
     }
-  }, [sizes])
-
-  const handleRemoveSize = useCallback((size: string) => {
-    setSizes(prev => prev.filter(s => s !== size))
   }, [])
 
-  const handleImagesChange = useCallback((images: ProductImage[]) => {
-    setUploadedImages(images)
-  }, [])
-
-  const handleSizeKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleAddSize(newSize)
-    }
-  }, [newSize, handleAddSize])
-
-  // Submit
+  // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Validaciones
     if (!formData.name.trim()) {
       toast.error('El nombre es requerido')
       return
@@ -190,416 +252,358 @@ export default function ProductModal({ isOpen, onClose, product }: ProductModalP
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('No hay sesión activa')
 
-      let productId: string | undefined = product?.id
+      let productId = product?.id
 
-      // Crear o actualizar producto
-      if (product?.id) {
+      // Create or update product
+      if (productId) {
         const { error } = await supabase
           .from('products')
           .update(formData)
-          .eq('id', product.id)
-
+          .eq('id', productId)
+        
         if (error) throw error
-        productId = product.id
       } else {
         const { data: newProduct, error } = await supabase
           .from('products')
           .insert(formData)
-          .select()
+          .select('id')
           .single()
-
+        
         if (error) throw error
-        productId = newProduct?.id
+        
+        if (!newProduct?.id) {
+          throw new Error('No se recibió el ID del producto')
+        }
+        
+        productId = newProduct.id
       }
 
-      if (!productId) throw new Error('No se pudo obtener el ID del producto')
+      if (!productId) throw new Error('ID de producto inválido')
 
-      // Guardar talles
-      await saveSizes(productId)
+      // Save relations
+      await Promise.all([
+        saveSizes(productId),
+        saveImages(productId),
+        saveColors(productId)
+      ])
 
-      // Guardar imágenes nuevas
-      await saveImages(productId)
-
-      toast.success(product ? 'Producto actualizado' : 'Producto creado')
+      toast.success(product ? 'Producto actualizado ✓' : 'Producto creado ✓')
       router.refresh()
       onClose()
     } catch (error: any) {
-      console.error('Error al guardar producto:', error)
-      toast.error(error.message || 'Error al guardar el producto')
+      console.error('Error saving product:', error)
+      toast.error(error.message || 'Error al guardar')
     } finally {
       setLoading(false)
     }
   }
 
+  // Save Relations
   const saveSizes = async (productId: string) => {
-    if (sizes.length === 0) return
-
-    // Eliminar talles existentes
-    await supabase
-      .from('product_sizes')
-      .delete()
-      .eq('product_id', productId)
-
-    // Insertar nuevos talles
-    const sizesData = sizes.map((size, index) => ({
-      product_id: productId,
-      size,
-      in_stock: true,
-      order_index: index,
+    if (!sizes.length) return
+    
+    await supabase.from('product_sizes').delete().eq('product_id', productId)
+    
+    const data = sizes.map((size, i) => ({ 
+      product_id: productId, 
+      size, 
+      in_stock: true, 
+      order_index: i 
     }))
-
-    const { error } = await supabase
-      .from('product_sizes')
-      .insert(sizesData)
-
+    
+    const { error } = await supabase.from('product_sizes').insert(data)
     if (error) throw error
   }
 
   const saveImages = async (productId: string) => {
-    const newImages = uploadedImages.filter((img: any) => !img.id)
-    if (newImages.length === 0) return
-
-    const imagesData = newImages.map((img: any, index: number) => ({
+    const newImages = images.filter((img: any) => !img.id)
+    if (!newImages.length) return
+    
+    const data = newImages.map((img: any, i: number) => ({
       product_id: productId,
       url: typeof img === 'string' ? img : img.url,
       storage_path: img.storage_path || '',
       filename: img.filename || '',
-      is_primary: index === 0 && !product,
-      order_index: uploadedImages.length + index,
+      is_primary: i === 0 && !product,
+      order_index: images.length + i,
     }))
-
-    const { error } = await supabase
-      .from('product_images')
-      .insert(imagesData)
-
+    
+    const { error } = await supabase.from('product_images').insert(data)
     if (error) throw error
   }
 
-  const handleClose = () => {
-    if (!loading) {
-      resetForm()
-      onClose()
-    }
+  const saveColors = async (productId: string) => {
+    await supabase.from('product_colors').delete().eq('product_id', productId)
+    
+    if (!colorIds.length) return
+    
+    const data = colorIds.map((colorId, i) => ({ 
+      product_id: productId, 
+      color_id: colorId, 
+      order_index: i 
+    }))
+    
+    const { error } = await supabase.from('product_colors').insert(data)
+    if (error) throw error
   }
+
+  const isFormValid = formData.name.trim() && formData.category_id
 
   if (!isOpen) return null
 
   return (
     <>
-      <div className="fixed inset-0 z-50 overflow-y-auto">
-        <div className="flex items-start justify-center min-h-screen px-4 pt-4 pb-20">
-          <div 
-            className="fixed inset-0 bg-black/50 transition-opacity" 
-            onClick={handleClose}
-            aria-hidden="true"
-          />
-
-          <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full my-8">
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
+        <div className="flex min-h-screen items-start justify-center p-4 pt-[5vh]">
+          <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl">
+            
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-xl z-10">
-              <h2 className="text-2xl font-bold text-gray-900">
-                {product ? 'Editar Producto' : 'Nuevo Producto'}
-              </h2>
-              <button
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Package className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-white">
+                  {product ? 'Editar Producto' : 'Nuevo Producto'}
+                </h2>
+              </div>
+              <Button
                 type="button"
-                onClick={handleClose}
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
                 disabled={loading}
-                className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
-                aria-label="Cerrar modal"
+                className="text-white hover:bg-white/20"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
-              {/* Imágenes */}
-              <section>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
-                  <ImageIcon className="w-4 h-4" />
-                  Imágenes del producto
-                </label>
+            <form onSubmit={handleSubmit} className="max-h-[calc(100vh-180px)] overflow-y-auto">
+              <div className="p-6 space-y-6">
+                
+                {/* Images */}
                 <ImageManager
                   productId={product?.id || null}
-                  onImagesChange={handleImagesChange}
-                  initialImages={uploadedImages}
+                  onImagesChange={setImages}
+                  initialImages={images}
                 />
-              </section>
 
-              {/* Nombre y Slug */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="product-name" className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="product-name"
-                    type="text"
-                    value={formData.name}
-                    onChange={handleNameChange}
-                    required
-                    disabled={loading}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                    placeholder="Bombacha elastizada"
-                  />
-                </div>
+                <Separator />
 
-                <div>
-                  <label htmlFor="product-slug" className="block text-sm font-medium text-gray-700 mb-2">
-                    Slug (URL)
-                  </label>
-                  <input
-                    id="product-slug"
-                    type="text"
-                    value={formData.slug}
-                    onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-                    required
-                    disabled={loading}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 disabled:opacity-50"
-                  />
-                </div>
-              </div>
+                {/* Basic Info */}
+                <div className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nombre <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={handleNameChange}
+                        placeholder="Bombacha elastizada"
+                        disabled={loading}
+                      />
+                    </div>
 
-              {/* Descripción */}
-              <div>
-                <label htmlFor="product-description" className="block text-sm font-medium text-gray-700 mb-2">
-                  Descripción corta
-                </label>
-                <textarea
-                  id="product-description"
-                  value={formData.short_description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, short_description: e.target.value }))}
-                  rows={3}
-                  disabled={loading}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
-                  placeholder="Describe el producto..."
-                />
-              </div>
-
-              {/* Categoría, Tipo y Precio */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Categoría */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label htmlFor="product-category" className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                      <Tag className="w-4 h-4" />
-                      Categoría <span className="text-red-500">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickAddCategory(true)}
-                      className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Nueva
-                    </button>
+                    <div className="space-y-2">
+                      <Label htmlFor="slug">Slug (URL)</Label>
+                      <Input
+                        id="slug"
+                        value={formData.slug}
+                        onChange={(e) => updateField('slug', e.target.value)}
+                        placeholder="bombacha-elastizada"
+                        disabled={loading}
+                        className="bg-gray-50"
+                      />
+                    </div>
                   </div>
-                  <select
-                    id="product-category"
-                    value={formData.category_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, category_id: e.target.value }))}
-                    required
-                    disabled={loading}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.icon} {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
-                {/* Tipo */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label htmlFor="product-type" className="block text-sm font-medium text-gray-700">
-                      Tipo
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickAddType(true)}
-                      className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Nuevo
-                    </button>
-                  </div>
-                  <select
-                    id="product-type"
-                    value={formData.type_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, type_id: e.target.value }))}
-                    disabled={loading}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                  >
-                    <option value="">Sin tipo</option>
-                    {types.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Precio */}
-                <div>
-                  <label htmlFor="product-price" className="block text-sm font-medium text-gray-700 mb-2">
-                    Precio
-                  </label>
-                  <input
-                    id="product-price"
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                    disabled={loading}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              {/* Talles */}
-              <section>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
-                  <Ruler className="w-4 h-4" />
-                  Talles disponibles
-                </label>
-
-                {/* Talles comunes */}
-                <div className="mb-3">
-                  <p className="text-xs text-gray-500 mb-2">
-                    Talles comunes (click para agregar):
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {COMMON_SIZES.map((size) => (
-                      <button
-                        key={size}
-                        type="button"
-                        onClick={() => handleAddSize(size)}
-                        disabled={sizes.includes(size) || loading}
-                        className={`px-3 py-1 text-sm rounded-full border-2 transition-all ${
-                          sizes.includes(size)
-                            ? 'border-green-500 bg-green-50 text-green-700 cursor-not-allowed'
-                            : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
-                        }`}
-                      >
-                        {size}
-                        {sizes.includes(size) && ' ✓'}
-                      </button>
-                    ))}
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Descripción corta</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.short_description}
+                      onChange={(e) => updateField('short_description', e.target.value)}
+                      placeholder="Describe el producto..."
+                      rows={3}
+                      disabled={loading}
+                    />
                   </div>
                 </div>
 
-                {/* Input personalizado */}
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={newSize}
-                    onChange={(e) => setNewSize(e.target.value.toUpperCase())}
-                    onKeyPress={handleSizeKeyPress}
-                    disabled={loading}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                    placeholder="O escribe un talle personalizado..."
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAddSize(newSize)}
-                    disabled={loading || !newSize.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                  >
-                    Agregar
-                  </button>
-                </div>
+                <Separator />
 
-                {/* Talles seleccionados */}
-                {sizes.length > 0 && (
-                  <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg">
-                    {sizes.map((size) => (
-                      <span
-                        key={size}
-                        className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-gray-300 rounded-full text-sm font-medium"
-                      >
-                        {size}
-                        <button
+                {/* Classification */}
+                <div className="space-y-4">
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {/* Category - ✅ FIX: Agregar key prop */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Categoría <span className="text-red-500">*</span></Label>
+                        <Button
                           type="button"
-                          onClick={() => handleRemoveSize(size)}
-                          disabled={loading}
-                          className="text-red-600 hover:text-red-700 disabled:opacity-50"
-                          aria-label={`Eliminar talle ${size}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openModal('category')}
+                          className="h-7 text-xs"
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
+                          + Nueva
+                        </Button>
+                      </div>
+                      <Select
+                        key={formData.category_id || 'empty-category'}
+                        value={formData.category_id}
+                        onValueChange={(value) => updateField('category_id', value)}
+                        disabled={loading}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.icon} {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Type - ✅ FIX: Agregar key prop */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Tipo</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openModal('type')}
+                          className="h-7 text-xs"
+                        >
+                          + Nuevo
+                        </Button>
+                      </div>
+                      <Select
+                        key={formData.type_id || 'empty-type'}
+                        value={formData.type_id}
+                        onValueChange={(value) => updateField('type_id', value)}
+                        disabled={loading}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sin tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {types.map((type) => (
+                            <SelectItem key={type.id} value={type.id}>
+                              {type.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Price */}
+                    <PriceInput
+                      label="Precio"
+                      value={formData.price}
+                      onChange={(value) => updateField('price', value)}
+                      disabled={loading}
+                    />
                   </div>
-                )}
-              </section>
+                </div>
 
-              {/* Switches */}
-              <div className="flex flex-col sm:flex-row gap-4 p-4 bg-gray-50 rounded-lg">
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <Separator />
+
+                {/* Colors */}
+                <ColorSelector
+                  colors={colors}
+                  selectedColorIds={colorIds}
+                  onChange={(ids) => {
+                    console.log('ColorSelector onChange called:', ids)
+                    setColorIds(ids)
+                  }}
+                  onAddNew={() => openModal('color')}
+                  disabled={loading}
+                />
+
+                <Separator />
+
+                {/* Sizes */}
+                <SizeSelector
+                  selectedSizes={sizes}
+                  onChange={setSizes}
+                  disabled={loading}
+                />
+
+                <Separator />
+
+                {/* Status */}
+                <div className="p-4 bg-gray-50 rounded-xl space-y-1">
+                  <Toggle
                     checked={formData.is_active}
-                    onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                    onChange={(checked: boolean) => updateField('is_active', checked)}
                     disabled={loading}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    label="Producto activo"
+                    description="Visible en el catálogo"
                   />
-                  <span className="text-sm font-medium text-gray-700">Producto activo</span>
-                </label>
-
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
+                  <Toggle
                     checked={formData.is_featured}
-                    onChange={(e) => setFormData(prev => ({ ...prev, is_featured: e.target.checked }))}
+                    onChange={(checked: boolean) => updateField('is_featured', checked)}
                     disabled={loading}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    label="Producto destacado"
+                    description="Aparece en destacados"
                   />
-                  <span className="text-sm font-medium text-gray-700">Producto destacado</span>
-                </label>
+                </div>
               </div>
 
               {/* Footer */}
-              <div className="flex justify-end space-x-4 pt-6 border-t sticky bottom-0 bg-white">
-                <button
+              <div className="sticky bottom-0 flex justify-end gap-3 px-6 py-4 bg-gray-50 border-t rounded-b-2xl">
+                <Button
                   type="button"
-                  onClick={handleClose}
+                  variant="outline"
+                  onClick={onClose}
                   disabled={loading}
-                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  disabled={loading}
-                  className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+                  disabled={loading || !isFormValid}
+                  className={
+                    isFormValid 
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700' 
+                      : 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed opacity-60'
+                  }
                 >
-                  <Save className="w-4 h-4" />
-                  <span>{loading ? 'Guardando...' : product ? 'Actualizar' : 'Crear Producto'}</span>
-                </button>
+                  <Save className="w-4 h-4 mr-2" />
+                  {loading ? 'Guardando...' : product ? 'Actualizar' : 'Crear'}
+                </Button>
               </div>
             </form>
           </div>
         </div>
       </div>
 
-      {/* Modales Quick Add */}
+      {/* Modals */}
       <QuickAddModal
-        isOpen={showQuickAddCategory}
-        onClose={() => setShowQuickAddCategory(false)}
+        isOpen={modals.category}
+        onClose={() => closeModal('category')}
         type="category"
-        onSuccess={loadCategories}
+        onSuccess={(id) => handleQuickAddSuccess('category', id)}
       />
 
       <QuickAddModal
-        isOpen={showQuickAddType}
-        onClose={() => setShowQuickAddType(false)}
+        isOpen={modals.type}
+        onClose={() => closeModal('type')}
         type="type"
-        onSuccess={loadTypes}
+        onSuccess={(id) => handleQuickAddSuccess('type', id)}
+      />
+
+      <QuickAddColorModal
+        isOpen={modals.color}
+        onClose={() => closeModal('color')}
+        onSuccess={(id) => handleQuickAddSuccess('color', id)}
       />
     </>
   )

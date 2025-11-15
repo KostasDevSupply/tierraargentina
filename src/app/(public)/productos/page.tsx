@@ -39,7 +39,6 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
     .from('products')
     .select('price')
     .eq('is_active', true)
-    // .order('price', { ascending: true })
     .gt('price', 0)
 
   const prices = priceData?.map(p => p.price) || [0]
@@ -47,26 +46,31 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
   const maxPrice = Math.ceil(Math.max(...prices))
 
   const minPriceFilter = params.min 
-      ? Math.max(minPrice, parseInt(params.min as string)) 
-      : minPrice
-    
-    const maxPriceFilter = params.max 
-      ? Math.min(maxPrice, parseInt(params.max as string)) 
-      : maxPrice
+    ? Math.max(minPrice, parseInt(params.min as string)) 
+    : minPrice
+  
+  const maxPriceFilter = params.max 
+    ? Math.min(maxPrice, parseInt(params.max as string)) 
+    : maxPrice
 
-    console.log('🔍 Price Filter Applied:', {
-      minPriceFilter,
-      maxPriceFilter,
-      fromURL: { min: params.min, max: params.max }
-    })
+  console.log('🔍 Price Filter Applied:', {
+    minPriceFilter,
+    maxPriceFilter,
+    fromURL: { min: params.min, max: params.max }
+  })
 
-  // Query de productos con filtros
+  // ✅ Query de productos con filtros (INCLUYE COLORES)
   let query = supabase
     .from('products')
     .select(`
       *,
       category:categories!inner(*),
       type:types(*),
+      product_colors(
+        id,
+        color_id,
+        colors(id, name, hex_code)
+      ),
       images:product_images(*),
       sizes:product_sizes(*)
     `, { count: 'exact' })
@@ -82,9 +86,6 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
   }
 
   // ✅ Filtro de precio
-   query = query.gte('price', minPriceFilter)
-   query = query.lte('price', maxPriceFilter)
-
   query = query
     .gte('price', minPriceFilter)
     .lte('price', maxPriceFilter)
@@ -108,12 +109,18 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
       query = query.order('created_at', { ascending: false })
   }
 
-  // Ejecutar query
-  const { data: products, count, error } = await query.range(0, 11)
+  // ✅ Ejecutar query y normalizar colores
+  const { data, count, error } = await query.range(0, 11)
 
   if (error) {
     console.error('Error fetching products:', error)
   }
+
+  // ✅ Normalizar colores para que ProductCard los entienda
+  const products = data?.map((p: any) => ({
+    ...p,
+    colors: p.product_colors?.map((pc: any) => pc.colors) || []
+  })) || []
 
   const totalCount = count || 0
   const hasMore = totalCount > 12

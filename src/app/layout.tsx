@@ -1,7 +1,9 @@
-import { CartProvider } from '@/contexts/CartContext'
-import CartButton from '@/components/cart/CartButton'
-import CartDrawer from '@/components/cart/CartDrawer'
-import AnnouncementBar from '@/components/public/AnnouncementBar'
+import './globals.css'
+
+export const metadata = {
+  title: 'Tierra Argentina',
+  description: 'Lencería de Calidad',
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

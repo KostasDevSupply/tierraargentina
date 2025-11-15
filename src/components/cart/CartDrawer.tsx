@@ -4,6 +4,7 @@ import { X, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react'
 import { useCartStore, useWhatsAppMessage } from '@/lib/stores/cartStore'
 import Image from 'next/image'
 import Link from 'next/link'
+
 export default function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, removeItem, clearCart } =
     useCartStore()
@@ -13,7 +14,7 @@ export default function CartDrawer() {
 
   const handleWhatsAppCheckout = () => {
     const message = generateMessage()
-    const whatsappNumber = '+5491156308907' // ⚠️ CAMBIAR POR TU NÚMERO
+    const whatsappNumber = '+5491156308907'
     window.open(
       `https://wa.me/${whatsappNumber}?text=${message}`,
       '_blank',
@@ -25,14 +26,15 @@ export default function CartDrawer() {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* ✅ BACKDROP CON BLUR - z-index alto */}
       <div
-        className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] transition-all duration-300"
         onClick={closeCart}
+        style={{ backdropFilter: 'blur(8px)' }}
       />
 
-      {/* Drawer */}
-      <div className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white z-50 shadow-2xl flex flex-col animate-slide-in-right">
+      {/* ✅ DRAWER - Ancho aumentado a 550px */}
+      <div className="fixed top-0 right-0 h-full w-full sm:w-[550px] bg-white z-[101] shadow-2xl flex flex-col animate-slide-in-right">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-pink-50 to-rose-50">
           <div className="flex items-center gap-3">
@@ -68,50 +70,62 @@ export default function CartDrawer() {
                 ¡Agregá productos para comenzar!
               </p>
               <Link href={"/productos"}>
-              <button
-                onClick={closeCart}
-                className="bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition"
-              >
-                Ver productos
-              </button>
+                <button
+                  onClick={closeCart}
+                  className="bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition"
+                >
+                  Ver productos
+                </button>
               </Link>
-
             </div>
           ) : (
             <div className="space-y-4">
               {items.map((item) => (
                 <div
-                  key={`${item.productId}-${item.size}`}
-                  className="bg-gray-50 rounded-xl p-4 flex gap-4"
+                  key={`${item.productId}-${item.size}-${item.color}`}
+                  className="bg-gray-50 rounded-xl p-4 flex gap-4 hover:bg-gray-100 transition"
                 >
                   {/* Image */}
-                  <div className="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0">
+                  <div className="w-24 h-24 bg-white rounded-lg overflow-hidden flex-shrink-0 shadow-sm">
                     {item.image ? (
                       <Image
                         src={item.image}
                         alt={item.name}
-                        width={80}
-                        height={80}
+                        width={96}
+                        height={96}
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <ShoppingBag className="w-8 h-8 text-gray-400" />
+                        <ShoppingBag className="w-10 h-10 text-gray-400" />
                       </div>
                     )}
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-900 mb-1 line-clamp-2">
+                    <h3 className="font-bold text-gray-900 mb-2 leading-tight text-base">
                       {item.name}
                     </h3>
-                    {item.size && (
-                      <p className="text-sm text-gray-600 mb-2">
-                        Talle: {item.size}
-                      </p>
-                    )}
-                    <p className="text-lg font-bold text-pink-600">
+                    <div className="space-y-1.5">
+                      {/* ✅ Mostrar COLOR */}
+                      {item.color && (
+                        <p className="text-sm text-gray-700 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                          <span className="text-xs text-gray-500">Color:</span>
+                          <span className="font-medium">{item.color}</span>
+                        </p>
+                      )}
+                      {/* ✅ Talle minimalista */}
+                      {item.size && (
+                        <p className="text-sm text-gray-700 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                          <span className="text-xs text-gray-500">Talle:</span>
+                          <span className="font-medium">{item.size}</span>
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-lg font-bold text-pink-600 mt-2">
                       ${(item.price * item.quantity).toLocaleString('es-AR')}
                     </p>
                   </div>
@@ -120,7 +134,7 @@ export default function CartDrawer() {
                   <div className="flex flex-col items-end justify-between">
                     <button
                       onClick={() => removeItem(item.productId, item.size)}
-                      className="text-red-500 hover:text-red-700 transition p-1"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition p-1.5"
                       title="Eliminar"
                     >
                       <Trash2 className="w-5 h-5" />
@@ -135,11 +149,11 @@ export default function CartDrawer() {
                             item.quantity - 1
                           )
                         }
-                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-gray-200 rounded-lg transition border border-gray-200"
+                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-pink-50 rounded-lg transition border border-gray-300 hover:border-pink-400"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
-                      <span className="w-8 text-center font-bold">
+                      <span className="w-10 text-center font-bold text-lg">
                         {item.quantity}
                       </span>
                       <button
@@ -150,7 +164,7 @@ export default function CartDrawer() {
                             item.quantity + 1
                           )
                         }
-                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-gray-200 rounded-lg transition border border-gray-200"
+                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-pink-50 rounded-lg transition border border-gray-300 hover:border-pink-400"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -161,9 +175,9 @@ export default function CartDrawer() {
 
               <button
                 onClick={clearCart}
-                className="w-full text-red-500 hover:text-red-700 font-medium text-sm py-2 transition"
+                className="w-full text-red-500 hover:text-red-700 hover:bg-red-50 font-medium text-sm py-3 rounded-lg transition"
               >
-                Vaciar carrito
+                🗑️ Vaciar carrito
               </button>
             </div>
           )}
@@ -174,7 +188,7 @@ export default function CartDrawer() {
           <div className="border-t-2 border-gray-200 p-6 space-y-4 bg-gray-50">
             <div className="flex items-center justify-between text-lg">
               <span className="font-semibold text-gray-700">Subtotal:</span>
-              <span className="font-bold text-gray-900">
+              <span className="font-bold text-gray-900 text-2xl">
                 ${totalPrice.toLocaleString('es-AR')}
               </span>
             </div>

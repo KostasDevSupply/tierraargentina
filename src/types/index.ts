@@ -355,3 +355,75 @@ export type AsyncFunction<T = void> = () => Promise<T>
 export type DeepPartial<T> = {
   [P in keyof T]?: DeepPartial<T[P]>
 }
+
+// ACTUALIZAR: src/types/index.ts
+
+// ============================================
+// AGREGAR Color
+// ============================================
+export interface Color {
+  id: string
+  name: string
+  hex_code: string
+  slug: string
+  order_index: number
+  is_active: boolean
+  user_created: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ============================================
+// ACTUALIZAR Product (agregar campos faltantes)
+// ============================================
+export interface Product {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  short_description: string | null
+  price: number
+  notes: string | null
+  category_id: string
+  type_id: string | null
+  color_id: string | null  // ← AGREGAR
+  is_active: boolean
+  is_featured: boolean  // ← AGREGAR
+  sales_count: number
+  created_at: string
+  updated_at: string
+  
+  // Relaciones (para queries con joins)
+  category?: Category
+  type?: Type | null
+  color?: Color | null  // ← AGREGAR
+  sizes?: ProductSize[]
+  images?: ProductImage[]
+}
+
+// ============================================
+// ProductSize (corregir)
+// ============================================
+export interface ProductSize {
+  id?: string
+  product_id?: string
+  size: string
+  order_index: number
+  in_stock: boolean
+  created_at?: string
+}
+
+// ============================================
+// ProductImage (corregir)
+// ============================================
+export interface ProductImage {
+  id?: string
+  product_id?: string
+  url: string
+  storage_path?: string
+  filename?: string
+  order_index: number
+  is_primary: boolean
+  created_at?: string
+}

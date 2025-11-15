@@ -1,7 +1,6 @@
-// components/public/ProductDetailClient.tsx
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Heart, Share2, CheckCircle, Eye } from 'lucide-react'
@@ -21,20 +20,49 @@ export default function ProductDetailClient({
   sortedSizes,
 }: ProductDetailClientProps) {
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
+  const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const [showGallery, setShowGallery] = useState(false)
   const [galleryStartIndex, setGalleryStartIndex] = useState(0)
-  
+
   const addItem = useCartStore((state) => state.addItem)
   const openCart = useCartStore((state) => state.openCart)
 
-  const whatsappMessage = useMemo(() => {
+  // ✅ Obtener colores del producto
+  const colors = product.colors || []
+  const hasColors = colors.length > 0
+
+  // 🔍 DEBUG - Ver qué trae el producto
+  useEffect(() => {
+    console.log('=== PRODUCT DEBUG ===')
+    console.log('Full product:', product)
+    console.log('Product colors:', product.colors)
+    console.log('Product product_colors:', product.product_colors)
+    console.log('Colors array:', colors)
+    console.log('Has colors:', hasColors)
+    console.log('====================')
+  }, [product, colors, hasColors])
+
+  // ✅ FIX: Generar mensaje de WhatsApp dinámicamente
+  const handleWhatsAppClick = useCallback(() => {
     const baseUrl = typeof window !== 'undefined' ? window.location.href : ''
-    return encodeURIComponent(
-      `Hola! Me interesa el producto: ${product.name}${
-        selectedSize ? ` - Talle: ${selectedSize}` : ''
-      }\nVer en: ${baseUrl}`
-    )
-  }, [product.name, selectedSize])
+    let message = `Hola! Me interesa el producto: ${product.name}`
+    
+    if (selectedColor) {
+      const colorName = colors.find((c: any) => c.id === selectedColor)?.name
+      if (colorName) message += ` - Color: ${colorName}`
+    }
+    
+    if (selectedSize) {
+      message += ` - Talle: ${selectedSize}`
+    }
+    
+    message += `\n\nVer en: ${baseUrl}`
+    
+    const encodedMessage = encodeURIComponent(message)
+    const whatsappUrl = `https://wa.me/+5491156308907?text=${encodedMessage}`
+    
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
+  }, [product.name, selectedSize, selectedColor, colors])
 
   const openGallery = useCallback((index: number) => {
     setGalleryStartIndex(index)
@@ -64,19 +92,31 @@ export default function ProductDetailClient({
 
   const handleAddToCart = useCallback(() => {
     const primaryImage = sortedImages[0]?.url || null
-    
+
+    const selectedColorName = selectedColor 
+      ? colors.find((c: any) => c.id === selectedColor)?.name 
+      : null
+
+    console.log('🛒 Adding to cart:', {
+      productId: product.id,
+      name: product.name,
+      size: selectedSize,
+      color: selectedColorName,
+    })
+
     addItem({
       productId: product.id,
       name: product.name,
       slug: product.slug,
       price: product.price,
       size: selectedSize,
+      color: selectedColorName,  
       image: primaryImage,
       category: product.category?.name,
     })
-    
+
     setTimeout(() => openCart(), 500)
-  }, [product, selectedSize, sortedImages, addItem, openCart])
+  }, [product, selectedSize, selectedColor, colors, sortedImages, addItem, openCart])
 
   return (
     <>
@@ -99,7 +139,7 @@ export default function ProductDetailClient({
                   quality={90}
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-                  <Eye className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition" />
+                  <Eye className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition" />    
                 </div>
               </>
             ) : (
@@ -128,7 +168,7 @@ export default function ProductDetailClient({
                   />
                 </div>
               ))}
-              
+
               {sortedImages.length > 4 && (
                 <button
                   onClick={() => openGallery(0)}
@@ -192,12 +232,50 @@ export default function ProductDetailClient({
             </div>
           )}
 
+          {/* ✅ COLORES DISPONIBLES */}
+          {hasColors && (
+            <div className="border-2 border-purple-200 bg-purple-50 rounded-xl p-4">
+              <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <span className="text-lg">🎨</span>
+                Colores disponibles
+                {selectedColor && (
+                  <span className="text-pink-600 ml-2">
+                    - {colors.find((c: any) => c.id === selectedColor)?.name}
+                  </span>
+                )}
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                {colors.map((color: any) => (
+                  <button
+                    key={color.id}
+                    onClick={() => setSelectedColor(color.id)}
+                    className={`group relative flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all ${
+                      selectedColor === color.id
+                        ? 'border-pink-600 bg-pink-50 scale-105 shadow-lg'
+                        : 'border-gray-200 bg-white hover:border-pink-300 hover:bg-pink-50'
+                    }`}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full border-2 border-white shadow-md ring-2 ring-gray-300 group-hover:ring-pink-400 transition"
+                      style={{ backgroundColor: color.hex_code }}
+                    />
+                    <span className="font-medium text-gray-900">{color.name}</span>
+                    {selectedColor === color.id && (
+                      <CheckCircle className="w-5 h-5 text-pink-600 ml-auto" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TALLES DISPONIBLES */}
           {sortedSizes.length > 0 && (
             <div>
               <h3 className="font-bold text-gray-900 mb-3">
-                Talles disponibles{' '}
+                Talles disponibles
                 {selectedSize && (
-                  <span className="text-pink-600">
+                  <span className="text-pink-600 ml-2">
                     - Seleccionado: {selectedSize}
                   </span>
                 )}
@@ -266,24 +344,28 @@ export default function ProductDetailClient({
               disabled={sortedSizes.length > 0 && !selectedSize}
               onAddToCart={handleAddToCart}
             />
-            
+
             {sortedSizes.length > 0 && !selectedSize && (
               <p className="text-sm text-amber-600 text-center">
                 ⚠️ Por favor seleccioná un talle
               </p>
             )}
 
-            <a
-              href={`https://wa.me/+5491156308907?text=${whatsappMessage}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            {/* ✅ FIX: Botón onClick en lugar de href */}
+            <button
+              onClick={handleWhatsAppClick}
               className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-semibold transition-all hover:scale-105 shadow-lg"
             >
               Consultar por WhatsApp
-              {selectedSize && (
-                <span className="text-sm font-normal">({selectedSize})</span>
+              {(selectedSize || selectedColor) && (
+                <span className="text-sm font-normal">
+                  ({[
+                    selectedColor && colors.find((c: any) => c.id === selectedColor)?.name,
+                    selectedSize
+                  ].filter(Boolean).join(', ')})
+                </span>
               )}
-            </a>
+            </button>
 
             <div className="flex gap-3">
               <button

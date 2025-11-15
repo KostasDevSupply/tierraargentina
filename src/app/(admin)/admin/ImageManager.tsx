@@ -471,7 +471,7 @@ export default function ImageManager({
       {sortedImages.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
-            ✅ Imágenes ({sortedImages.length})
+            Imágenes ({sortedImages.length})
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedImages.map((image, index) => (
