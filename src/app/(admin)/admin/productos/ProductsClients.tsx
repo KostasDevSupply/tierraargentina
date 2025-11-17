@@ -20,12 +20,14 @@ import {
   X,
   Grid3x3,
   List,
-  SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  Tag,
+  Layers
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import ToggleProductButton from './ToggleProductButton'
+import ProductModal from './ProductModal' // ✅ IMPORT
 
 interface ProductsClientProps {
   products: any[]
@@ -39,16 +41,20 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
   const [products, setProducts] = useState(initialProducts)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [colorFilter, setColorFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [productToDelete, setProductToDelete] = useState<any>(null)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   
-  // ✅ Estados para vista
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [gridColumns, setGridColumns] = useState<GridColumns>(3)
-  const [showFilters, setShowFilters] = useState(false)
+
+  // ✅ Estados para ProductModal
+  const [showProductModal, setShowProductModal] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<any>(null)
 
   // Estadísticas
   const stats = useMemo(() => ({
@@ -64,6 +70,12 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            product.slug?.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesCategory = categoryFilter === 'all' || product.category?.id === categoryFilter
+      const matchesType = typeFilter === 'all' || product.type?.id === typeFilter
+      
+      let matchesColor = true
+      if (colorFilter !== 'all') {
+        matchesColor = product.colors?.some((c: any) => c.id === colorFilter) || false
+      }
       
       let matchesStatus = true
       if (statusFilter === 'active') matchesStatus = product.is_active
@@ -71,19 +83,35 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
       if (statusFilter === 'featured') matchesStatus = product.is_featured
       if (statusFilter === 'no-images') matchesStatus = !product.images || product.images.length === 0
       
-      return matchesSearch && matchesCategory && matchesStatus
+      return matchesSearch && matchesCategory && matchesType && matchesColor && matchesStatus
     })
-  }, [products, searchQuery, categoryFilter, statusFilter])
+  }, [products, searchQuery, categoryFilter, typeFilter, colorFilter, statusFilter])
 
-  // Categorías únicas
+  // Categorías, tipos y colores únicos
   const categories = useMemo(() => {
     const cats = new Map()
     products.forEach(p => {
-      if (p.category) {
-        cats.set(p.category.id, p.category)
-      }
+      if (p.category) cats.set(p.category.id, p.category)
     })
     return Array.from(cats.values())
+  }, [products])
+
+  const types = useMemo(() => {
+    const typesList = new Map()
+    products.forEach(p => {
+      if (p.type) typesList.set(p.type.id, p.type)
+    })
+    return Array.from(typesList.values())
+  }, [products])
+
+  const colors = useMemo(() => {
+    const colorsList = new Map()
+    products.forEach(p => {
+      p.colors?.forEach((color: any) => {
+        colorsList.set(color.id, color)
+      })
+    })
+    return Array.from(colorsList.values())
   }, [products])
 
   const handleDelete = async () => {
@@ -135,7 +163,26 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
     }
   }
 
-  // ✅ Clases para grid dinámico
+  // ✅ Función para abrir modal de edición
+  const handleEditProduct = (product: any) => {
+    setEditingProduct(product)
+    setShowProductModal(true)
+    setOpenDropdown(null)
+  }
+
+  // ✅ Función para abrir modal de nuevo producto
+  const handleNewProduct = () => {
+    setEditingProduct(null)
+    setShowProductModal(true)
+  }
+
+  // ✅ Función para cerrar modal y refrescar
+  const handleCloseModal = () => {
+    setShowProductModal(false)
+    setEditingProduct(null)
+    router.refresh()
+  }
+
   const gridClasses = {
     2: 'grid-cols-1 md:grid-cols-2',
     3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
@@ -143,6 +190,16 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
     5: 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
     6: 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
   }
+
+  const clearAllFilters = () => {
+    setSearchQuery('')
+    setCategoryFilter('all')
+    setTypeFilter('all')
+    setColorFilter('all')
+    setStatusFilter('all')
+  }
+
+  const hasActiveFilters = searchQuery || categoryFilter !== 'all' || typeFilter !== 'all' || colorFilter !== 'all' || statusFilter !== 'all'
 
   return (
     <>
@@ -154,18 +211,21 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
               <h1 className="text-3xl font-semibold text-gray-900 mb-2">Productos</h1>
               <p className="text-gray-600">Gestiona tu catálogo de productos</p>
             </div>
-            <Link href="/admin/productos/nuevo">
-              <button className="flex items-center gap-2 px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-medium shadow-sm hover:shadow-md transition-all">
-                <Plus className="w-5 h-5" />
-                Nuevo Producto
-              </button>
-            </Link>
+            
+            {/* ✅ Botón que abre modal */}
+            <button
+              onClick={handleNewProduct}
+              className="flex items-center gap-2 px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-medium shadow-sm hover:shadow-md transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Nuevo Producto
+            </button>
           </div>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <button
-              onClick={() => setStatusFilter(statusFilter === 'all' ? 'all' : 'all')}
+              onClick={() => setStatusFilter('all')}
               className={`bg-white rounded-2xl p-6 border-2 transition-all text-left ${
                 statusFilter === 'all' ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200 hover:shadow-md'
               }`}
@@ -233,90 +293,119 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
             </button>
           </div>
 
-          {/* Toolbar mejorado */}
+          {/* Toolbar */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
             <div className="p-4">
-              <div className="flex flex-col lg:flex-row gap-4">
-                {/* Search */}
-                <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar productos por nombre o slug..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition"
-                  />
-                </div>
-
-                {/* Category Filter */}
-                <div className="relative lg:w-64">
-                  <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="w-full pl-12 pr-10 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition appearance-none bg-white cursor-pointer"
-                  >
-                    <option value="all">Todas las categorías</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.icon} {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                </div>
-
-                {/* View Controls */}
-                <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
-                  {/* Grid/List Toggle */}
-                  <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`p-2 rounded-md transition-all ${
-                        viewMode === 'grid' 
-                          ? 'bg-white shadow-sm text-pink-600' 
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                      title="Vista en cuadrícula"
-                    >
-                      <Grid3x3 className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`p-2 rounded-md transition-all ${
-                        viewMode === 'list' 
-                          ? 'bg-white shadow-sm text-pink-600' 
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                      title="Vista en lista"
-                    >
-                      <List className="w-5 h-5" />
-                    </button>
+              <div className="flex flex-col gap-4">
+                {/* Primera fila: Search + View Controls */}
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar productos por nombre o slug..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition"
+                    />
                   </div>
 
-                  {/* Columns Selector (solo en modo grid) */}
-                  {viewMode === 'grid' && (
-                    <div className="relative">
-                      <select
-                        value={gridColumns}
-                        onChange={(e) => setGridColumns(Number(e.target.value) as GridColumns)}
-                        className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition appearance-none bg-white cursor-pointer text-sm font-medium"
+                  <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+                    <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`p-2 rounded-md transition-all ${
+                          viewMode === 'grid' ? 'bg-white shadow-sm text-pink-600' : 'text-gray-600 hover:text-gray-900'
+                        }`}
                       >
-                        <option value={2}>2 columnas</option>
-                        <option value={3}>3 columnas</option>
-                        <option value={4}>4 columnas</option>
-                        <option value={5}>5 columnas</option>
-                        <option value={6}>6 columnas</option>
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <Grid3x3 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setViewMode('list')}
+                        className={`p-2 rounded-md transition-all ${
+                          viewMode === 'list' ? 'bg-white shadow-sm text-pink-600' : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        <List className="w-5 h-5" />
+                      </button>
                     </div>
-                  )}
+
+                    {viewMode === 'grid' && (
+                      <div className="relative">
+                        <select
+                          value={gridColumns}
+                          onChange={(e) => setGridColumns(Number(e.target.value) as GridColumns)}
+                          className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition appearance-none bg-white cursor-pointer text-sm font-medium"
+                        >
+                          <option value={2}>2 columnas</option>
+                          <option value={3}>3 columnas</option>
+                          <option value={4}>4 columnas</option>
+                          <option value={5}>5 columnas</option>
+                          <option value={6}>6 columnas</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Segunda fila: Filtros */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="relative">
+                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="w-full pl-12 pr-10 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition appearance-none bg-white cursor-pointer"
+                    >
+                      <option value="all">Todas las categorías</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.icon} {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative">
+                    <Layers className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+                    <select
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      className="w-full pl-12 pr-10 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition appearance-none bg-white cursor-pointer"
+                    >
+                      <option value="all">Todos los tipos</option>
+                      {types.map(type => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative">
+                    <Palette className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+                    <select
+                      value={colorFilter}
+                      onChange={(e) => setColorFilter(e.target.value)}
+                      className="w-full pl-12 pr-10 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition appearance-none bg-white cursor-pointer"
+                    >
+                      <option value="all">Todos los colores</option>
+                      {colors.map(color => (
+                        <option key={color.id} value={color.id}>
+                          {color.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
 
               {/* Active Filters */}
-              {(searchQuery || categoryFilter !== 'all' || statusFilter !== 'all') && (
+              {hasActiveFilters && (
                 <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
                   <span className="text-sm text-gray-600">Filtros activos:</span>
                   {searchQuery && (
@@ -335,6 +424,22 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                       </button>
                     </span>
                   )}
+                  {typeFilter !== 'all' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm">
+                      Tipo
+                      <button onClick={() => setTypeFilter('all')} className="hover:text-purple-900">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  {colorFilter !== 'all' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm">
+                      Color
+                      <button onClick={() => setColorFilter('all')} className="hover:text-indigo-900">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
                   {statusFilter !== 'all' && (
                     <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
                       Estado: {statusFilter}
@@ -344,11 +449,7 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                     </span>
                   )}
                   <button
-                    onClick={() => {
-                      setSearchQuery('')
-                      setCategoryFilter('all')
-                      setStatusFilter('all')
-                    }}
+                    onClick={clearAllFilters}
                     className="text-sm text-gray-600 hover:text-gray-900 underline ml-2"
                   >
                     Limpiar todos
@@ -367,18 +468,18 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No hay productos</h3>
             <p className="text-gray-600 mb-6">
-              {searchQuery || categoryFilter !== 'all' || statusFilter !== 'all'
+              {hasActiveFilters
                 ? 'No se encontraron productos con esos filtros'
                 : 'Comienza agregando tu primer producto'}
             </p>
-            <Link href="/admin/productos/nuevo">
-              <button className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-medium transition">
-                Crear Producto
-              </button>
-            </Link>
+            <button
+              onClick={handleNewProduct}
+              className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-medium transition"
+            >
+              Crear Producto
+            </button>
           </div>
         ) : viewMode === 'grid' ? (
-          // ✅ VISTA GRID
           <div className={`grid ${gridClasses[gridColumns]} gap-6`}>
             {filteredProducts.map((product) => {
               const primaryImage = product.images?.find((img: any) => img.is_primary) || product.images?.[0]
@@ -388,7 +489,6 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                   key={product.id}
                   className="bg-white rounded-2xl border border-gray-200 hover:shadow-xl transition-all duration-300 overflow-hidden group"
                 >
-                  {/* Image */}
                   <div className="relative aspect-square bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
                     {primaryImage?.url ? (
                       <img
@@ -402,7 +502,6 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                       </div>
                     )}
 
-                    {/* Badges */}
                     <div className="absolute top-3 left-3 flex flex-col gap-2">
                       {product.is_featured && (
                         <span className="px-3 py-1 bg-yellow-500 text-white text-xs font-medium rounded-full flex items-center gap-1 shadow-md">
@@ -417,7 +516,6 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                       )}
                     </div>
 
-                    {/* Actions Dropdown */}
                     <div className="absolute top-3 right-3">
                       <div className="relative">
                         <button
@@ -440,12 +538,14 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                                   Ver producto
                                 </button>
                               </Link>
-                              <Link href={`/admin/productos/${product.id}`}>
-                                <button className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700">
-                                  <Edit2 className="w-4 h-4" />
-                                  Editar
-                                </button>
-                              </Link>
+                              {/* ✅ Botón Editar abre modal */}
+                              <button
+                                onClick={() => handleEditProduct(product)}
+                                className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Editar
+                              </button>
                               <button
                                 onClick={() => {
                                   handleToggleFeatured(product)
@@ -474,7 +574,6 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                       </div>
                     </div>
 
-                    {/* Image Counter */}
                     {product.images && product.images.length > 0 && (
                       <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/60 text-white text-xs rounded-full flex items-center gap-1">
                         <Camera className="w-3 h-3" />
@@ -483,32 +582,28 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                     )}
                   </div>
 
-                  {/* Content */}
                   <div className="p-5">
-                    {/* Category */}
                     {product.category && (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-pink-600 bg-pink-50 px-2 py-1 rounded-md mb-2">
                         <span>{product.category.icon}</span>
                         {product.category.name}
                       </span>
                     )}
+                    {product.type?.name && (
+                      <span className="inline-flex ml-2 items-center gap-1 text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-md mb-2">
+                        <Tag className="w-3 h-3" />
+                        {product.type.name}
+                      </span>
+                    )}
 
-                    {/* Title */}
                     <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 min-h-[3rem] leading-tight">
                       {product.name}
                     </h3>
 
-                    {/* Type */}
-                    {product.type && (
-                      <p className="text-sm text-gray-500 mb-2">{product.type.name}</p>
-                    )}
-
-                    {/* Price */}
                     <p className="text-2xl font-semibold text-pink-600 mb-3">
                       {product.price > 0 ? `$${product.price.toLocaleString('es-AR')}` : 'Consultar'}
                     </p>
 
-                    {/* Meta Info */}
                     <div className="flex items-center gap-4 text-sm text-gray-600 mb-3 pb-3 border-b border-gray-100">
                       {product.sizes && product.sizes.length > 0 && (
                         <span className="flex items-center gap-1">
@@ -524,7 +619,6 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                       )}
                     </div>
 
-                    {/* Colors Preview */}
                     {product.colors && product.colors.length > 0 && (
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-xs text-gray-500">Colores:</span>
@@ -546,7 +640,6 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                       </div>
                     )}
 
-                    {/* Toggle Active */}
                     <ToggleProductButton
                       productId={product.id}
                       isActive={product.is_active}
@@ -558,153 +651,196 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
             })}
           </div>
         ) : (
-          // ✅ VISTA LISTA
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Producto
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Categoría
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Precio
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Talles
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Colores
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Fotos
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredProducts.map((product) => {
-                    const primaryImage = product.images?.find((img: any) => img.is_primary) || product.images?.[0]
-                    
-                    return (
-                      <tr key={product.id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                              {primaryImage?.url ? (
-                                <img
-                                  src={primaryImage.url}
-                                  alt={product.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <Package className="w-6 h-6 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">{product.name}</p>
-                              {product.type && (
-                                <p className="text-sm text-gray-500">{product.type.name}</p>
-                              )}
-                            </div>
+          // VISTA LISTA
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+    {/* Wrapper con scroll horizontal */}
+    <div className="overflow-x-auto">
+      <div className="inline-block min-w-full align-middle">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-10">
+            <tr>
+              <th className="sticky left-0 z-20 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                Producto
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                Categoría
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                Tipo
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                Precio
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                Talles
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                Colores
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                Fotos
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                Estado
+              </th>
+              <th className="sticky right-0 z-20 bg-gray-50 px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider border-l border-gray-200 whitespace-nowrap">
+                Acciones
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredProducts.map((product, index) => {
+              const primaryImage = product.images?.find((img: any) => img.is_primary) || product.images?.[0]
+              
+              return (
+                <tr key={product.id} className={`hover:bg-pink-50 transition ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                  {/* Producto - STICKY LEFT */}
+                  <td className="sticky left-0 z-10 bg-inherit px-4 py-3 border-r border-gray-200">
+                    <div className="flex items-center gap-3 min-w-[280px]">
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg overflow-hidden flex-shrink-0 shadow-sm">
+                        {primaryImage?.url ? (
+                          <img src={primaryImage.url} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="w-5 h-5 text-gray-400" />
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {product.category && (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-pink-600 bg-pink-50 px-2 py-1 rounded-md">
-                              <span>{product.category.icon}</span>
-                              {product.category.name}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <p className="text-lg font-semibold text-pink-600">
-                            {product.price > 0 ? `$${product.price.toLocaleString('es-AR')}` : 'Consultar'}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-gray-600">
-                            {product.sizes?.length || 0} talles
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {product.colors && product.colors.length > 0 ? (
-                            <div className="flex items-center gap-1">
-                              {product.colors.slice(0, 3).map((color: any) => (
-                                <div
-                                  key={color.id}
-                                  className="w-6 h-6 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-200"
-                                  style={{ backgroundColor: color.hex_code }}
-                                  title={color.name}
-                                />
-                              ))}
-                              {product.colors.length > 3 && (
-                                <span className="text-xs text-gray-500 ml-1">
-                                  +{product.colors.length - 3}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <Camera className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm text-gray-600">
-                              {product.images?.length || 0}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <ToggleProductButton
-                            productId={product.id}
-                            isActive={product.is_active}
-                            isFeatured={product.is_featured}
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-gray-900 truncate max-w-[200px]" title={product.name}>
+                          {product.name}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate" title={product.slug}>
+                          {product.slug}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  
+                  {/* Categoría */}
+                  <td className="px-4 py-3">
+                    {product.category ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-pink-600 bg-pink-50 px-2 py-1 rounded-md whitespace-nowrap">
+                        <span>{product.category.icon}</span>
+                        {product.category.name}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </td>
+                  
+                  {/* Tipo */}
+                  <td className="px-4 py-3">
+                    {product.type ? (
+                      <span className="text-sm text-gray-700 whitespace-nowrap">{product.type.name}</span>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </td>
+                  
+                  {/* Precio */}
+                  <td className="px-4 py-3">
+                    <p className="text-base font-semibold text-pink-600 whitespace-nowrap">
+                      {product.price > 0 ? `$${product.price.toLocaleString('es-AR')}` : 'Consultar'}
+                    </p>
+                  </td>
+                  
+                  {/* Talles */}
+                  <td className="px-4 py-3 text-center">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium">
+                      {product.sizes?.length || 0}
+                    </span>
+                  </td>
+                  
+                  {/* Colores */}
+                  <td className="px-4 py-3">
+                    {product.colors && product.colors.length > 0 ? (
+                      <div className="flex items-center justify-center gap-0.5">
+                        {product.colors.slice(0, 4).map((color: any) => (
+                          <div
+                            key={color.id}
+                            className="w-5 h-5 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-200"
+                            style={{ backgroundColor: color.hex_code }}
+                            title={color.name}
                           />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Link href={`/productos/${product.slug}`} target="_blank">
-                              <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition">
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            </Link>
-                            <Link href={`/admin/productos/${product.id}`}>
-                              <button className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition">
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                            </Link>
-                            <button
-                              onClick={() => {
-                                setProductToDelete(product)
-                                setShowDeleteModal(true)
-                              }}
-                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                        ))}
+                        {product.colors.length > 4 && (
+                          <span className="text-[10px] text-gray-500 ml-1 font-medium">
+                            +{product.colors.length - 4}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </td>
+                  
+                  {/* Fotos */}
+                  <td className="px-4 py-3 text-center">
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded-md">
+                      <Camera className="w-3 h-3" />
+                      <span className="text-xs font-medium">{product.images?.length || 0}</span>
+                    </div>
+                  </td>
+                  
+                  {/* Estado */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center">
+                      <ToggleProductButton productId={product.id} isActive={product.is_active} isFeatured={product.is_featured} />
+                    </div>
+                  </td>
+                  
+                  {/* Acciones - STICKY RIGHT */}
+                  <td className="sticky right-0 z-10 bg-inherit px-4 py-3 border-l border-gray-200">
+                    <div className="flex items-center justify-end gap-1">
+                      <Link href={`/productos/${product.slug}`} target="_blank">
+                        <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition" title="Ver producto">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </Link>
+                      <button
+                        onClick={() => handleEditProduct(product)}
+                        className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                        title="Editar"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setProductToDelete(product)
+                          setShowDeleteModal(true)
+                        }}
+                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
+    </div>
+    
+    {/* Indicador de scroll */}
+    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-2 border-t border-gray-200">
+      <p className="text-xs text-gray-500 text-center">
+        💡 Tip: Deslizá horizontalmente para ver más columnas
+      </p>
+    </div>
+  </div>
+)}
+      </div>
+
+      {/* ✅ ProductModal */}
+      <ProductModal
+        isOpen={showProductModal}
+        onClose={handleCloseModal}
+        product={editingProduct}
+      />
 
       {/* Delete Modal */}
       {showDeleteModal && (
@@ -713,12 +849,8 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] transition-opacity"
             onClick={() => !deleting && setShowDeleteModal(false)}
           />
-
           <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
-            <div 
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
@@ -726,37 +858,22 @@ export default function ProductsClient({ products: initialProducts }: ProductsCl
                       <AlertTriangle className="w-6 h-6 text-red-600" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        ¿Eliminar producto?
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Esta acción no se puede deshacer
-                      </p>
+                      <h3 className="text-xl font-semibold text-gray-900">¿Eliminar producto?</h3>
+                      <p className="text-sm text-gray-600 mt-1">Esta acción no se puede deshacer</p>
                     </div>
                   </div>
                   {!deleting && (
-                    <button
-                      onClick={() => setShowDeleteModal(false)}
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
-                    >
+                    <button onClick={() => setShowDeleteModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition">
                       <X className="w-5 h-5 text-gray-500" />
                     </button>
                   )}
                 </div>
               </div>
-
               <div className="p-6">
-                <p className="text-gray-700 mb-2">
-                  Estás a punto de eliminar el producto:
-                </p>
-                <p className="font-semibold text-gray-900 bg-gray-50 px-4 py-3 rounded-xl">
-                  {productToDelete?.name}
-                </p>
-                <p className="text-sm text-gray-600 mt-4">
-                  Se eliminarán todas las imágenes, talles y colores asociados a este producto.
-                </p>
+                <p className="text-gray-700 mb-2">Estás a punto de eliminar el producto:</p>
+                <p className="font-semibold text-gray-900 bg-gray-50 px-4 py-3 rounded-xl">{productToDelete?.name}</p>
+                <p className="text-sm text-gray-600 mt-4">Se eliminarán todas las imágenes, talles y colores asociados a este producto.</p>
               </div>
-
               <div className="p-6 bg-gray-50 flex gap-3">
                 <button
                   onClick={() => setShowDeleteModal(false)}
