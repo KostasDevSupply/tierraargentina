@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { Plus, Pencil} from 'lucide-react'
 import DeleteCategoryButton from './DeleteCategoryButton'
 import ToggleCategoryButton from './ToggleCategoryButton'
-import TiposPage from '../tipos/page'
 
 export default async function CategoriasPage() {
   const supabase = await createClient()
