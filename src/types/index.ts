@@ -1,65 +1,7 @@
-// types/index.ts
+// src/types/index.ts
 
 // ============================================
-// DATABASE TYPES
-// ============================================
-
-export interface Database {
-  public: {
-    Tables: {
-      products: Product
-      categories: Category
-      types: Type
-      product_sizes: ProductSize
-      product_images: ProductImage
-      announcement_bar: AnnouncementBar
-      site_settings: SiteSetting
-      search_suggestions: SearchSuggestion
-      audit_log: AuditLog
-    }
-  }
-}
-
-// ============================================
-// PRODUCTS
-// ============================================
-
-export interface Product {
-  id: string
-  name: string
-  slug: string
-  description: string | null
-  short_description: string | null
-  price: number
-  notes: string | null
-  category_id: string
-  type_id: string | null
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface ProductWithRelations extends Product {
-  category: Category
-  type: Type | null
-  sizes: ProductSize[]
-  images: ProductImage[]
-}
-
-export interface ProductFormData {
-  name: string
-  slug: string
-  description?: string
-  short_description?: string
-  price: number
-  notes?: string
-  category_id: string
-  type_id?: string
-  is_active: boolean
-}
-
-// ============================================
-// CATEGORIES & TYPES
+// CORE ENTITIES
 // ============================================
 
 export interface Category {
@@ -68,6 +10,7 @@ export interface Category {
   slug: string
   icon: string | null
   order_index: number
+  is_active: boolean
   user_created: boolean
   created_by: string | null
   created_at: string
@@ -79,10 +22,104 @@ export interface Type {
   name: string
   slug: string
   order_index: number
+  is_active: boolean
   user_created: boolean
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+export interface Color {
+  id: string
+  name: string
+  hex_code: string
+  slug: string
+  order_index: number
+  is_active: boolean
+  user_created: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ============================================
+// PRODUCT RELATED
+// ============================================
+
+export interface ProductSize {
+  id?: string
+  product_id?: string
+  size: string
+  order_index: number
+  in_stock: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ProductImage {
+  id?: string
+  product_id?: string
+  url: string
+  storage_path?: string
+  filename?: string
+  order_index: number
+  is_primary: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ProductColor {
+  id?: string
+  product_id?: string
+  color_id: string
+  order_index: number
+  created_at?: string
+  updated_at?: string
+  // Relación
+  colors?: Color
+}
+
+// ✅ PRODUCTO - Definición única y completa
+export interface Product {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  short_description: string | null
+  price: number
+  notes: string | null
+  category_id: string
+  type_id: string | null
+  is_active: boolean
+  is_featured: boolean
+  sales_count: number
+  created_at: string
+  updated_at: string
+  
+  // ✅ Relaciones (para queries con joins)
+  category?: Category
+  type?: Type | null
+  colors?: Color[]  // ✅ Array de colores (relación many-to-many)
+  sizes?: ProductSize[]
+  images?: ProductImage[]
+  product_colors?: ProductColor[]  // ✅ Tabla intermedia
+}
+
+// ============================================
+// FORM DATA TYPES
+// ============================================
+
+export interface ProductFormData {
+  name: string
+  slug: string
+  description?: string
+  short_description?: string
+  price: number
+  notes?: string
+  category_id: string
+  type_id?: string
+  is_active: boolean
+  is_featured: boolean
 }
 
 export interface CategoryFormData {
@@ -98,27 +135,12 @@ export interface TypeFormData {
   order_index: number
 }
 
-// ============================================
-// PRODUCT SIZES & IMAGES
-// ============================================
-
-export interface ProductSize {
-  id?: string
-  product_id?: string
-  size: string
+export interface ColorFormData {
+  name: string
+  slug: string
+  hex_code: string
   order_index: number
-  stock: number | null
-  in_stock: boolean
-}
-
-export interface ProductImage {
-  id: string
-  product_id: string
-  url: string
-  filename: string
-  order_index: number
-  is_primary: boolean
-  created_at: string
+  is_active: boolean
 }
 
 // ============================================
@@ -212,6 +234,7 @@ export interface CartItem {
   slug: string
   price: number
   size: string | null
+  color?: Color | null
   quantity: number
   image: string | null
   category?: string
@@ -229,6 +252,7 @@ export interface CartState {
 export interface ProductFilters {
   categoria?: string
   tipo?: string
+  color?: string
   buscar?: string
   orden?: 'reciente' | 'precio-asc' | 'precio-desc' | 'nombre'
 }
@@ -252,7 +276,7 @@ export interface PaginatedResponse<T> {
 }
 
 // ============================================
-// COMPONENT PROPS (GENÉRICOS)
+// COMPONENT PROPS
 // ============================================
 
 export interface BaseComponentProps {
@@ -261,21 +285,7 @@ export interface BaseComponentProps {
 }
 
 export interface ProductCardProps {
-  product: {
-    id: string
-    name: string
-    slug: string
-    price: number
-    short_description?: string
-    category?: {
-      name: string
-      slug: string
-    }
-    images?: Array<{
-      url: string
-      is_primary: boolean
-    }>
-  }
+  product: Product
 }
 
 export interface CategoryCardProps {
@@ -309,6 +319,7 @@ export interface AdminStats {
   inactiveProducts: number
   totalCategories: number
   totalTypes: number
+  totalColors: number
   recentOrders: number
 }
 
@@ -356,74 +367,68 @@ export type DeepPartial<T> = {
   [P in keyof T]?: DeepPartial<T[P]>
 }
 
-// ACTUALIZAR: src/types/index.ts
+// ============================================
+// DATABASE TYPES (para Supabase)
+// ============================================
 
-// ============================================
-// AGREGAR Color
-// ============================================
-export interface Color {
-  id: string
-  name: string
-  hex_code: string
-  slug: string
-  order_index: number
-  is_active: boolean
-  user_created: boolean
-  created_by: string | null
-  created_at: string
-  updated_at: string
-}
-
-// ============================================
-// ACTUALIZAR Product (agregar campos faltantes)
-// ============================================
-export interface Product {
-  id: string
-  name: string
-  slug: string
-  description: string | null
-  short_description: string | null
-  price: number
-  notes: string | null
-  category_id: string
-  type_id: string | null
-  color_id: string | null  // ← AGREGAR
-  is_active: boolean
-  is_featured: boolean  // ← AGREGAR
-  sales_count: number
-  created_at: string
-  updated_at: string
-  
-  // Relaciones (para queries con joins)
-  category?: Category
-  type?: Type | null
-  color?: Color | null  // ← AGREGAR
-  sizes?: ProductSize[]
-  images?: ProductImage[]
-}
-
-// ============================================
-// ProductSize (corregir)
-// ============================================
-export interface ProductSize {
-  id?: string
-  product_id?: string
-  size: string
-  order_index: number
-  in_stock: boolean
-  created_at?: string
-}
-
-// ============================================
-// ProductImage (corregir)
-// ============================================
-export interface ProductImage {
-  id?: string
-  product_id?: string
-  url: string
-  storage_path?: string
-  filename?: string
-  order_index: number
-  is_primary: boolean
-  created_at?: string
+export interface Database {
+  public: {
+    Tables: {
+      products: {
+        Row: Product
+        Insert: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'category' | 'type' | 'colors' | 'sizes' | 'images' | 'product_colors'>
+        Update: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at' | 'category' | 'type' | 'colors' | 'sizes' | 'images' | 'product_colors'>>
+      }
+      categories: {
+        Row: Category
+        Insert: Omit<Category, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Category, 'id' | 'created_at' | 'updated_at'>>
+      }
+      types: {
+        Row: Type
+        Insert: Omit<Type, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Type, 'id' | 'created_at' | 'updated_at'>>
+      }
+      colors: {
+        Row: Color
+        Insert: Omit<Color, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Color, 'id' | 'created_at' | 'updated_at'>>
+      }
+      product_sizes: {
+        Row: ProductSize
+        Insert: Omit<ProductSize, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<ProductSize, 'id' | 'created_at' | 'updated_at'>>
+      }
+      product_images: {
+        Row: ProductImage
+        Insert: Omit<ProductImage, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<ProductImage, 'id' | 'created_at' | 'updated_at'>>
+      }
+      product_colors: {
+        Row: ProductColor
+        Insert: Omit<ProductColor, 'id' | 'created_at' | 'updated_at' | 'colors'>
+        Update: Partial<Omit<ProductColor, 'id' | 'created_at' | 'updated_at' | 'colors'>>
+      }
+      announcement_bar: {
+        Row: AnnouncementBar
+        Insert: Omit<AnnouncementBar, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<AnnouncementBar, 'id' | 'created_at' | 'updated_at'>>
+      }
+      site_settings: {
+        Row: SiteSetting
+        Insert: Omit<SiteSetting, 'id' | 'updated_at'>
+        Update: Partial<Omit<SiteSetting, 'id' | 'updated_at'>>
+      }
+      search_suggestions: {
+        Row: SearchSuggestion
+        Insert: Omit<SearchSuggestion, 'id'>
+        Update: Partial<Omit<SearchSuggestion, 'id'>>
+      }
+      audit_log: {
+        Row: AuditLog
+        Insert: Omit<AuditLog, 'id' | 'created_at'>
+        Update: never
+      }
+    }
+  }
 }

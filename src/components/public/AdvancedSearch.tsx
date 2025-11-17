@@ -83,7 +83,7 @@ export default function AdvancedSearch() {
     }
   }
 
-  const getSuggestions = async () => {
+const getSuggestions = async () => {
     try {
       const { data } = await supabase
         .from('search_suggestions')
@@ -93,7 +93,7 @@ export default function AdvancedSearch() {
         .limit(3)
 
       if (data) {
-        setSuggestions(data.map((s) => s.query))
+        setSuggestions(data.map((s: { query: string }) => s.query))
       }
     } catch (error) {
       console.error('Error getting suggestions:', error)

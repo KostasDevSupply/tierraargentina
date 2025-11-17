@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { cache } from 'react'
-import type { Product, ProductWithRelations } from '@/types'
 
 // ✅ Cache en React para evitar duplicar queries
 export const getProducts = cache(async (filters?: {
